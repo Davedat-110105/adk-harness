@@ -29,7 +29,7 @@ export AGENT_ENGINE_ID=2214932639050104832
 export GOOGLE_CLOUD_PROJECT=model-creek-506520-u4
 export GOOGLE_CLOUD_LOCATION=global          # for model calls
 export AGENT_ENGINE_LOCATION=us-central1     # for sessions and memory
-export GOOGLE_GENAI_USE_VERTEXAI=true
+export GOOGLE_GENAI_USE_ENTERPRISE=true   # GOOGLE_GENAI_USE_VERTEXAI still works but is deprecated
 ```
 
 ### Verified working

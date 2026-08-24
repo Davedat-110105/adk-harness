@@ -38,46 +38,45 @@ before any harness acts — regardless of which vendor is doing the work.
 
 ```mermaid
 flowchart TB
-    user["Caller"] --> orch
+    caller["Caller"]
 
     subgraph adk["Google ADK Runner"]
-        orch["Gemini 3.5 Flash orchestrator<br/>routes by capability"]
-        plugin["CoactraGovernance<br/>BasePlugin"]
-        subgraph agents["HarnessAgent per harness"]
-            hc["claude-code"]
-            hx["codex"]
-            ho["opencode"]
-        end
+        direction TB
+        orch["Gemini 3.5 Flash<br/>orchestrator — routes by capability"]
+        gate{"CoactraGovernance<br/>before_tool_callback"}
+        pause["request_confirmation<br/>human answers, ADK resumes"]
+        agents["HarnessAgent<br/>one per available harness"]
     end
 
-    subgraph harnesses["Real harnesses"]
-        sdk["claude-agent-sdk<br/>Python SDK"]
-        cli["codex CLI<br/>subprocess"]
-        http["opencode serve<br/>HTTP + OpenAPI"]
+    subgraph harnesses["Harnesses — three integration shapes"]
+        direction LR
+        hc["claude-code<br/><i>Python SDK</i>"]
+        hx["codex<br/><i>CLI subprocess</i>"]
+        ho["opencode<br/><i>HTTP + OpenAPI</i>"]
     end
 
     subgraph gcp["Google Cloud"]
+        direction LR
         vertex["Vertex AI<br/>location: global"]
-        sql["Cloud SQL Postgres<br/>DatabaseSessionService"]
-        run["Cloud Run"]
+        engine["Agent Engine<br/>Sessions + Memory Bank"]
+        run["Cloud Run<br/>hosted demo"]
     end
 
-    policy["coactra Policy<br/>allow / deny / requires_approval"]
+    caller --> orch
+    orch -->|"every tool call"| gate
+    gate -->|"allow"| agents
+    gate -->|"deny — reason returned as the tool result"| orch
+    gate -->|"requires_approval"| pause
+    pause --> agents
 
-    orch --> plugin
-    plugin -->|"await policy.check()"| policy
-    policy -->|"allow"| agents
-    policy -->|"deny"| plugin
-    policy -->|"requires_approval"| human["request_confirmation<br/>human answers, ADK resumes"]
-    human --> agents
-
-    hc --> sdk
-    hx --> cli
-    ho --> http
+    agents --> hc & hx & ho
 
     orch -.->|"model calls"| vertex
-    adk -.->|"sessions + memory"| sql
-    adk -.->|"hosted demo"| run
+    adk -.->|"state that outlives the process"| engine
+    adk -.-> run
+
+    classDef gateStyle fill:#fde68a,stroke:#b45309,stroke-width:2px
+    class gate gateStyle
 ```
 
 Every tool call from every harness passes `CoactraGovernance.before_tool_callback`
@@ -89,8 +88,8 @@ that stays true whether a harness is used as a sub-agent or as a tool.
 | Component | Where it lives |
 |---|---|
 | Agent Registry | `HarnessRegistry` — discovery, versioning, capability lookup |
-| Agent Runtime | Each harness is an ADK `BaseAgent` inside ADK's runner |
-| Memory Bank | `DatabaseSessionService` on Cloud SQL, surviving process restart |
+| Agent Runtime | Vertex AI Agent Engine via `VertexAiSessionService`; each harness is an ADK `BaseAgent` |
+| Memory Bank | Vertex AI Memory Bank via `VertexAiMemoryBankService` — provisioned and verified |
 | Agent Identity | `coactra.Scope` on every policy request |
 | Agent Gateway | One orchestrator, one plugin, one policy |
 | Model Armor | The plugin denies or pauses before a harness touches a repo |
@@ -126,7 +125,7 @@ gcloud services enable aiplatform.googleapis.com run.googleapis.com
 ```
 
 ```bash
-export GOOGLE_GENAI_USE_VERTEXAI=true
+export GOOGLE_GENAI_USE_ENTERPRISE=true   # GOOGLE_GENAI_USE_VERTEXAI still works but is deprecated
 export GOOGLE_CLOUD_PROJECT=YOUR_PROJECT_ID
 export GOOGLE_CLOUD_LOCATION=global
 ```

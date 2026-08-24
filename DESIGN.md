@@ -20,8 +20,8 @@ Every one of them has a home here:
 | Track component | What `adk-harness` provides |
 |---|---|
 | Agent Registry — publishing, versioning, discovering approved agents | `HarnessRegistry`: which harnesses are installed, at what version, with what capabilities |
-| Agent Runtime — long-running async background execution | Each harness runs as an ADK `BaseAgent` inside ADK's own runner |
-| Memory Bank — persistent secure cross-session context | ADK `DatabaseSessionService` on Cloud SQL, surviving process restart |
+| Agent Runtime — long-running async background execution | Vertex AI **Agent Engine** via `VertexAiSessionService`; each harness is an ADK `BaseAgent` inside the runner |
+| Memory Bank — persistent secure cross-session context | Vertex AI **Memory Bank** via `VertexAiMemoryBankService`, keyed on a real Agent Engine |
 | Agent Identity — zero-trust access control | Coactra `Scope` on every request; `google-adk[agent-identity]` extra |
 | Agent Gateway — unified routing and policy enforcement | One Gemini orchestrator routes to harnesses; one `BasePlugin` gates every tool call |
 | Model Armor — inline guardrails | The same plugin denies or pauses before any harness touches a repo |
@@ -80,7 +80,7 @@ recollection for anything in this table.
 
 `gemini-3.5-flash` is reachable **only on the `global` Vertex location**. It
 returns HTTP 404 in `us-central1`, while `gemini-2.5-flash` works in both — so
-this fails late, not early. Set `GOOGLE_GENAI_USE_VERTEXAI=true` and
+this fails late, not early. Set `GOOGLE_GENAI_USE_ENTERPRISE=true` (the former `GOOGLE_GENAI_USE_VERTEXAI` is deprecated) and
 `GOOGLE_CLOUD_LOCATION=global`, even when the Cloud Run service itself is
 deployed to a region.
 
