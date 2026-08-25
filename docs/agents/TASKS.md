@@ -129,17 +129,68 @@ arguments; an error message → `error` turn; `aclose()` idempotent.
 
 ---
 
-## Task 3 — `HarnessAgent` *(integrator)*
+## Tasks 1–4 are done
 
-`src/adk_harness/agent.py`. Wrap any `Harness` as an ADK `BaseAgent` so a
-Gemini orchestrator can call it as a sub-agent or as an `AgentTool`, with the
-governance plugin in front.
+Both adapters, `HarnessAgent`, and `build_fleet` are landed, tested, and
+deployed. See [OWNERSHIP.md](OWNERSHIP.md).
 
-## Task 4 — `build_fleet` *(integrator)*
+---
 
-`src/adk_harness/fleet.py`. A Gemini `LlmAgent` that routes work across the
-available harnesses, with one `CoactraGovernance` instance shared by all of
-them so the audit trail and the precedent store are common.
+## Task 5 — the opencode adapter
+
+**Owner:** unclaimed — claim it in `OWNERSHIP.md` before starting
+**Files you write:** `src/adk_harness/adapters/opencode.py`,
+`tests/test_adapter_opencode.py`
+
+Two adapters can accidentally agree with each other. A third that is
+structurally different is what turns "the protocol works" into evidence.
+Codex is a CLI subprocess; Claude Code is a Python SDK; opencode is an HTTP
+server with an OpenAPI spec. That third shape is the point of this task.
+
+**Verify before you write.** Find out how opencode's server is actually
+started and what its event stream looks like — from `opencode --help`, from its
+OpenAPI document, from the installed binary. Do not write this from
+recollection of the API. Record what you verified, and the version you verified
+against, in the module docstring. If opencode is not installed on this machine,
+say so and stop rather than guessing at an HTTP contract.
+
+`httpx` is already declared as the `opencode` extra in `pyproject.toml`. Use it.
+Everything in [CONTRACT.md](CONTRACT.md) applies unchanged — in particular,
+import `httpx` inside `discover()`, and stream the response rather than reading
+it to completion.
+
+**Tests** must pass with no opencode server running. Fake the HTTP layer.
+
+---
+
+## Task 6 — a precedent store that survives a restart
+
+**Owner:** unclaimed — claim it in `OWNERSHIP.md` before starting
+**Files you write:** `src/adk_harness/stores.py`, `tests/test_stores.py`
+
+This one matters more than it looks. `PrecedentStore` currently holds
+precedents in memory. The demo runs on Cloud Run with `--min-instances=0`, so
+the container scales to zero and forgets every answer a human ever gave.
+
+The library's whole claim is "answer once, never be asked again". A precedent
+that does not survive a restart is not a precedent.
+
+**Do not edit `precedent.py`.** It is frozen, and its tests pin two safety
+properties that must not be disturbed. Write a *subclass or wrapper* in a new
+module that persists to SQLite (stdlib `sqlite3` — no new dependency), loading
+existing precedents on construction and writing each one on `add()`.
+
+Read `precedent.py` first. Note especially that `Applicability` is a frozen
+dataclass with an `operator` drawn from a fixed `SUPPORTED` tuple, and that
+`Precedent.review_after` is an optional datetime — round-tripping those
+faithfully is most of the work. A precedent that comes back from disk with a
+lost or altered predicate is worse than one that was never saved, because it
+will silently admit calls the human never approved.
+
+**Tests** must cover the round trip: save a precedent with several
+`Applicability` predicates and a `review_after`, construct a fresh store over
+the same file, and assert `match()` behaves identically to the in-memory store
+for the same facts. Use `tmp_path`.
 
 ---
 
