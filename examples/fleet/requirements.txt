@@ -1,0 +1,4 @@
+# Installed into the Cloud Run container. adk-harness is not on PyPI yet, so it
+# comes straight from the public repo; coactra and google-adk arrive as its
+# transitive dependencies.
+adk-harness @ git+https://github.com/Davedat-110105/adk-harness.git@main

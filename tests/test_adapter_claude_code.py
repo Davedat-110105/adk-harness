@@ -4,18 +4,23 @@ These must pass whether or not `claude-agent-sdk` is actually installed in the
 environment running pytest. "SDK missing" is simulated by stuffing `None` into
 `sys.modules["claude_agent_sdk"]`, which makes any `import claude_agent_sdk`
 raise `ImportError` (the standard trick for this — see the import system
-docs). "SDK present" is simulated by installing one fake module per test, built
-from dataclasses that mirror the real package's message and content-block
-shapes (same field names, same `isinstance` targets), so `run()`'s
-block-to-kind mapping is exercised without a real subprocess or network call.
+docs). "SDK present" is simulated by installing one fake per test:
+`_FakeClaudeAgentSdk`, a plain class (not `types.ModuleType`, so every
+attribute below is a normal, statically-typed instance attribute rather than
+dynamic module-attribute noise pyright can't follow) built from dataclasses
+that mirror the real package's message and content-block shapes (same field
+names, same `isinstance` targets), so `run()`'s block-to-kind mapping is
+exercised without a real subprocess or network call. Python's import system
+does not require the object in `sys.modules` to be a real module — `from
+claude_agent_sdk import X` only needs it to have an `.X` attribute.
 
 Every message and block instance a test constructs must come from the *same*
-fake module that gets installed into `sys.modules` — the adapter re-imports
+fake instance that gets installed into `sys.modules` — the adapter re-imports
 `from claude_agent_sdk import AssistantMessage, ...` inside `run()`, so an
-`isinstance` check against a class from a different module instance (even one
-built by the same factory function) would silently fail. `_fake_claude_agent_sdk()`
-therefore returns one module whose `messages` list a test fills in afterwards,
-rather than taking the messages up front.
+`isinstance` check against a class from a different `_FakeClaudeAgentSdk`
+instance (even one built by the same class) would silently fail.
+`_fake_claude_agent_sdk()` therefore returns one fake whose `.messages` list a
+test fills in afterwards, rather than taking the messages up front.
 
 The `claude` CLI binary check is exercised via monkeypatching `shutil.which`,
 so these tests don't depend on what happens to be on PATH.
@@ -24,7 +29,6 @@ so these tests don't depend on what happens to be on PATH.
 from __future__ import annotations
 
 import sys
-import types as module_types
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from typing import Any
@@ -35,110 +39,123 @@ from adk_harness.adapters.claude_code import ClaudeCodeHarness
 from adk_harness.protocol import HarnessTurn
 
 
-def _fake_claude_agent_sdk() -> module_types.ModuleType:
-    """A fake `claude_agent_sdk` module. Fill `mod.messages` before running.
+class _FakeClaudeAgentSdk:
+    """A fake `claude_agent_sdk` module-alike. Fill `.messages` before running.
 
-    `query()` reads `mod.messages` (and raises `mod.raise_after`, if set) at
-    call time, so a test can build message/block instances using this
-    module's own classes and only then point `mod.messages` at them.
+    Python's import system does not require `sys.modules["claude_agent_sdk"]`
+    to be a real `types.ModuleType` — `from claude_agent_sdk import X` only
+    needs the object already in `sys.modules` to have an `.X` attribute. A
+    plain class (rather than `ModuleType`, whose attributes are dynamic as far
+    as the type checker is concerned) is enough, and lets every attribute
+    below be a normal, statically-typed instance attribute.
+
+    `query()` reads `self.messages` (and raises `self.raise_after`, if set) at
+    call time, so a test can build message/block instances using this fake's
+    own classes and only then point `.messages` at them.
     """
-    mod = module_types.ModuleType("claude_agent_sdk")
-    mod.__version__ = "0.0.0-fake"
-    mod.messages: list[Any] = []
-    mod.raise_after: Exception | None = None
-    mod.calls: dict[str, Any] = {}
 
-    @dataclass
-    class TextBlock:
-        text: str
+    def __init__(self) -> None:
+        self.__version__ = "0.0.0-fake"
+        self.messages: list[Any] = []
+        self.raise_after: Exception | None = None
+        self.calls: dict[str, Any] = {}
 
-    @dataclass
-    class ThinkingBlock:
-        thinking: str
-        signature: str = "sig"
+        @dataclass
+        class TextBlock:
+            text: str
 
-    @dataclass
-    class ToolUseBlock:
-        id: str
-        name: str
-        input: dict[str, Any]
+        @dataclass
+        class ThinkingBlock:
+            thinking: str
+            signature: str = "sig"
 
-    @dataclass
-    class ToolResultBlock:
-        tool_use_id: str
-        content: str | list[dict[str, Any]] | None = None
-        is_error: bool | None = None
+        @dataclass
+        class ToolUseBlock:
+            id: str
+            name: str
+            input: dict[str, Any]
 
-    @dataclass
-    class ServerToolUseBlock:
-        id: str
-        name: str
-        input: dict[str, Any]
+        @dataclass
+        class ToolResultBlock:
+            tool_use_id: str
+            content: str | list[dict[str, Any]] | None = None
+            is_error: bool | None = None
 
-    @dataclass
-    class ServerToolResultBlock:
-        tool_use_id: str
-        content: Any = None
+        @dataclass
+        class ServerToolUseBlock:
+            id: str
+            name: str
+            input: dict[str, Any]
 
-    @dataclass
-    class AssistantMessage:
-        content: list[Any]
-        model: str = "fake-model"
-        error: str | None = None
+        @dataclass
+        class ServerToolResultBlock:
+            tool_use_id: str
+            content: Any = None
 
-    @dataclass
-    class UserMessage:
-        content: Any = ""
+        @dataclass
+        class AssistantMessage:
+            content: list[Any]
+            model: str = "fake-model"
+            error: str | None = None
 
-    @dataclass
-    class ResultMessage:
-        subtype: str = "success"
-        duration_ms: int = 100
-        duration_api_ms: int = 90
-        is_error: bool = False
-        num_turns: int = 1
-        session_id: str = "sess-1"
-        total_cost_usd: float | None = 0.01
-        result: str | None = None
-        errors: list[str] | None = None
+        @dataclass
+        class UserMessage:
+            content: Any = ""
 
-    class ClaudeSDKError(Exception):
-        pass
+        @dataclass
+        class ResultMessage:
+            subtype: str = "success"
+            duration_ms: int = 100
+            duration_api_ms: int = 90
+            is_error: bool = False
+            num_turns: int = 1
+            session_id: str = "sess-1"
+            total_cost_usd: float | None = 0.01
+            result: str | None = None
+            errors: list[str] | None = None
 
-    class ResultError(ClaudeSDKError):
-        pass
+        class ClaudeSDKError(Exception):
+            pass
 
-    @dataclass
-    class ClaudeAgentOptions:
-        cwd: Any = None
-        model: Any = None
-        allowed_tools: list[str] = field(default_factory=list)
-        permission_mode: Any = None
-        system_prompt: Any = None
-        resume: Any = None
+        class ResultError(ClaudeSDKError):
+            pass
 
-    async def query(*, prompt: Any, options: Any = None) -> AsyncIterator[Any]:
-        mod.calls["prompt"] = prompt
-        mod.calls["options"] = options
-        for message in mod.messages:
-            yield message
-        if mod.raise_after is not None:
-            raise mod.raise_after
+        @dataclass
+        class ClaudeAgentOptions:
+            cwd: Any = None
+            model: Any = None
+            allowed_tools: list[str] = field(default_factory=list)
+            permission_mode: Any = None
+            system_prompt: Any = None
+            resume: Any = None
 
-    mod.TextBlock = TextBlock
-    mod.ThinkingBlock = ThinkingBlock
-    mod.ToolUseBlock = ToolUseBlock
-    mod.ToolResultBlock = ToolResultBlock
-    mod.ServerToolUseBlock = ServerToolUseBlock
-    mod.ServerToolResultBlock = ServerToolResultBlock
-    mod.AssistantMessage = AssistantMessage
-    mod.UserMessage = UserMessage
-    mod.ResultMessage = ResultMessage
-    mod.ClaudeSDKError = ClaudeSDKError
-    mod.ResultError = ResultError
-    mod.ClaudeAgentOptions = ClaudeAgentOptions
-    mod.query = query
-    return mod
+        fake = self
+
+        async def query(*, prompt: Any, options: Any = None) -> AsyncIterator[Any]:
+            fake.calls["prompt"] = prompt
+            fake.calls["options"] = options
+            for message in fake.messages:
+                yield message
+            if fake.raise_after is not None:
+                raise fake.raise_after
+
+        self.TextBlock = TextBlock
+        self.ThinkingBlock = ThinkingBlock
+        self.ToolUseBlock = ToolUseBlock
+        self.ToolResultBlock = ToolResultBlock
+        self.ServerToolUseBlock = ServerToolUseBlock
+        self.ServerToolResultBlock = ServerToolResultBlock
+        self.AssistantMessage = AssistantMessage
+        self.UserMessage = UserMessage
+        self.ResultMessage = ResultMessage
+        self.ClaudeSDKError = ClaudeSDKError
+        self.ResultError = ResultError
+        self.ClaudeAgentOptions = ClaudeAgentOptions
+        self.query = query
+
+
+def _fake_claude_agent_sdk() -> _FakeClaudeAgentSdk:
+    return _FakeClaudeAgentSdk()
 
 
 # ---------------------------------------------------------------------------
@@ -314,7 +331,7 @@ async def test_run_maps_assistant_error_field_to_error_turn(monkeypatch) -> None
 
     assert len(turns) == 1
     assert turns[0].kind == "error"
-    assert "rate_limit" in turns[0].text
+    assert turns[0].text is not None and "rate_limit" in turns[0].text
 
 
 @pytest.mark.asyncio
@@ -329,6 +346,7 @@ async def test_run_maps_successful_result_to_usage_turn(monkeypatch) -> None:
     assert len(turns) == 1
     assert turns[0].kind == "usage"
     assert turns[0].raw is result
+    assert turns[0].text is not None
     assert "3 turn" in turns[0].text
     assert "1500ms" in turns[0].text
 
@@ -372,7 +390,7 @@ async def test_run_surfaces_error_turn_when_sdk_raises_before_any_result(monkeyp
 
     assert len(turns) == 1
     assert turns[0].kind == "error"
-    assert "claude binary vanished" in turns[0].text
+    assert turns[0].text is not None and "claude binary vanished" in turns[0].text
 
 
 @pytest.mark.asyncio
@@ -440,7 +458,11 @@ async def test_aclose_terminates_a_run_left_mid_stream(monkeypatch) -> None:
     ]
 
     harness = ClaudeCodeHarness()
-    gen = harness.run("hello", cwd="/work/repo")
+    # `run()`'s declared return type matches the frozen `Harness` protocol
+    # (`AsyncIterator[HarnessTurn]`), which has no `.aclose()`; at runtime
+    # it's the async generator `run()` actually is. `Any` lets this test call
+    # `.aclose()` on it directly rather than only draining it via `async for`.
+    gen: Any = harness.run("hello", cwd="/work/repo")
     first = await gen.__anext__()
     assert first.text == "first"
 

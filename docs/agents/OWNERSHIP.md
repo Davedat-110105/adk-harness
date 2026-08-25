@@ -8,11 +8,16 @@ Last updated: 2026-08-25.
 
 ## Currently claimed
 
-| Files | Owner | Task |
+Nothing. Tasks 1–4 are landed and committed; the files below are now ordinary
+repository files under normal review, not held by anyone.
+
+| Files | Landed by | Task |
 |---|---|---|
-| `src/adk_harness/adapters/codex.py`, `tests/test_adapter_codex.py` | agent-codex-adapter | [TASKS.md](TASKS.md) task 1 |
-| `src/adk_harness/adapters/claude_code.py`, `tests/test_adapter_claude_code.py` | agent-claude-code-adapter | [TASKS.md](TASKS.md) task 2 |
-| `src/adk_harness/agent.py`, `src/adk_harness/fleet.py` | integrator | [TASKS.md](TASKS.md) tasks 3 and 4 |
+| `adapters/codex.py`, `tests/test_adapter_codex.py` | agent-codex-adapter | task 1 — done |
+| `adapters/claude_code.py`, `tests/test_adapter_claude_code.py` | agent-claude-code-adapter | task 2 — done |
+| `agent.py`, `tests/test_agent.py` | integrator | task 3 — done |
+| `fleet.py`, `tests/test_fleet.py`, `tests/test_fleet_live.py` | integrator | task 4 — done |
+| `examples/fleet/` | integrator | Cloud Run deployment target |
 
 ## Frozen — nobody edits without clearing it first
 

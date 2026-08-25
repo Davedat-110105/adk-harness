@@ -94,7 +94,7 @@ import importlib.metadata
 import json
 import shutil
 from collections.abc import AsyncIterator, Iterator, Sequence
-from typing import Any
+from typing import Any, cast
 
 from adk_harness.protocol import HarnessSpec, HarnessTurn
 
@@ -235,7 +235,13 @@ class ClaudeCodeHarness:
             cwd=cwd,
             model=self.model,
             allowed_tools=list(self.allowed_tools) if self.allowed_tools is not None else [],
-            permission_mode=self.permission_mode,
+            # `self.permission_mode` is a plain `str` in this adapter's public
+            # signature (deliberately: constraining it to the vendor's exact
+            # `PermissionMode` Literal set would require importing that type
+            # at module level, which CONTRACT.md rule 2 forbids). Widened
+            # here for the SDK's stricter type; an invalid value is the
+            # SDK's own runtime error to raise, not this adapter's to predict.
+            permission_mode=cast(Any, self.permission_mode),
             system_prompt=self.system_prompt,
             resume=session_id,
         )
@@ -274,7 +280,11 @@ class ClaudeCodeHarness:
                 # is dropped rather than force-fitted onto a kind it doesn't
                 # match — CONTRACT.md is explicit that this is the right call.
 
-        agen = query(prompt=prompt, options=options)
+        # `query()`'s declared return type is `AsyncIterator[Message]` (no
+        # `.aclose()` in that protocol) even though it is, in fact, an async
+        # generator — see the module docstring. `Any` here is what lets the
+        # `agen.aclose()` calls below type-check against what it actually is.
+        agen: Any = query(prompt=prompt, options=options)
         self._active_queries.append(agen)
         saw_error_turn = False
         try:

@@ -66,6 +66,55 @@ touching production config" and have every agent obey it.
 `adk-harness` makes that place exist. Policy is evaluated once, in one plugin,
 before any harness acts — regardless of which vendor is doing the work.
 
+## The precedent loop
+
+A policy that says "a human must decide" is correct and expensive. Ask a person
+the same question every morning and they stop reading the question — they just
+click approve. At that point the approval prompt has become a formality, which
+is worse than not having one, because it looks like oversight while providing
+none.
+
+So when policy says a human must decide, the gate first asks whether a human
+*already* decided this, under conditions that still hold:
+
+```
+policy says requires_approval
+   └─ does a precedent admit these facts?
+        ├─ exactly one, still valid  → apply it, no interruption
+        ├─ none                      → ask the human, then remember the answer
+        ├─ several that disagree     → ask; do not guess
+        └─ one, past its review date → ask; a stale answer is not an answer
+```
+
+Admission is by hard predicate, never by similarity. Every `Applicability` on a
+precedent must hold against the facts of the call, and **a missing fact is never
+a pass** — if the precedent constrains `path` and the call has no `path`, it does
+not apply. Similarity only ranks candidates that were already admitted, so no
+amount of "this looks close enough" can let one in. There is no model call
+anywhere in `precedent.py`.
+
+Two properties are pinned by tests because everything rests on them:
+
+- **Precedent never overrides a `deny`.** It only removes a repeated question,
+  never the gate itself.
+- **A precedent's scope is set by the human, not inferred.** `remember()` takes
+  `applicability` explicitly, so a casual "yes, that's fine" cannot silently
+  become a broad standing policy.
+
+```python
+# The human answered once. Their answer had a scope.
+fleet.governance.remember(
+    tool_name="run_codex",
+    precedent_id="pr-2026-08-25-tests",
+    applicability=[Applicability("cwd", "startswith", "/work/repo/tests")],
+    decision={"approve": True},
+    rationale="Test files are safe to edit without review.",
+    confirmed_by="dave",
+)
+```
+
+Tomorrow the same question is not asked. A different question still is.
+
 ## Architecture
 
 ```mermaid
@@ -115,17 +164,29 @@ Every tool call from every harness passes `CoactraGovernance.before_tool_callbac
 before it executes. Because ADK's `AgentTool` defaults to `include_plugins=True`,
 that stays true whether a harness is used as a sub-agent or as a tool.
 
-## Fleet-track components
+## What is where
 
-| Component | Where it lives |
+| Concern | Where it lives |
 |---|---|
-| Agent Registry | `HarnessRegistry` — discovery, versioning, capability lookup |
-| Agent Runtime | Vertex AI Agent Engine via `VertexAiSessionService`; each harness is an ADK `BaseAgent` |
-| Memory Bank | Vertex AI Memory Bank via `VertexAiMemoryBankService` — provisioned and verified |
-| Agent Identity | `coactra.Scope` on every policy request |
-| Agent Gateway | One orchestrator, one plugin, one policy |
-| Model Armor | The plugin denies or pauses before a harness touches a repo |
+| Registry | `HarnessRegistry` — discovery, versioning, capability lookup |
+| Runtime | Each harness is an ADK `BaseAgent`; sessions via ADK or Vertex AI Agent Engine |
+| Learned decisions | `PrecedentStore` — hard-predicate admission, no model call |
+| Identity | `coactra.Scope` on every policy request |
+| Gateway | One orchestrator, one plugin, one policy, one audit trail |
+| Enforcement | The plugin allows, pauses, or denies before a harness is dispatched |
 | Observability | ADK OpenTelemetry output plus a per-decision policy audit trail |
+
+### What the gate does and does not cover
+
+Dispatch is gated: whether *this harness* may work in *this directory* on *this
+task* is a policy decision, and `governance.py` keys the policy resource on
+`cwd` for that reason.
+
+The tool calls a harness makes inside its own run are **observed, not gated** —
+they execute in the harness's own process and never return through ADK.
+`HarnessAgent` surfaces them as events so they land in the transcript, and says
+so in its docstring rather than letting the audit trail imply more coverage than
+it has.
 
 ## Install
 
