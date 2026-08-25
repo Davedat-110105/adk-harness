@@ -35,7 +35,7 @@ ENV GOOGLE_GENAI_USE_ENTERPRISE=true \
 
 COPY pyproject.toml README.md ./
 COPY src/ ./src/
-RUN pip install --no-cache-dir .
+RUN pip install --no-cache-dir ".[tracing]"
 
 # ADK expects an agents directory holding one folder per agent.
 COPY --chown=appuser:appuser examples/fleet/ /app/agents/fleet/

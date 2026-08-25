@@ -19,6 +19,10 @@ dependencies = [
 claude-code = ["claude-agent-sdk>=0.2,<1"]
 opencode = ["httpx>=0.27"]
 a2a = ["google-adk[a2a]>=2.7,<3"]
+# ADK's --trace_to_cloud imports opentelemetry.exporter.cloud_trace, which lives
+# in google-adk's own `all` extra rather than its `gcp` one. Depending on the
+# exporter directly keeps the Cloud Run image small.
+tracing = ["opentelemetry-exporter-gcp-trace>=1.9,<2"]
 all = ["claude-agent-sdk>=0.2,<1", "httpx>=0.27"]
 dev = ["pytest>=8", "pytest-asyncio>=0.23", "ruff>=0.8", "pyright>=1.1"]
 
