@@ -12,7 +12,13 @@ license = { text = "MIT" }
 keywords = ["adk", "gemini", "agents", "claude-code", "codex", "opencode"]
 dependencies = [
     "google-adk[db]>=2.7,<3",
-    "coactra>=0.5.0",
+    # Upper bound deliberately. coactra is under active refactoring in its own
+    # repository — the workflow package was already deleted, and a layer rename
+    # is planned — so an unbounded pin means a coactra release could break
+    # `pip install adk-harness` for someone installing it tomorrow, without a
+    # single line changing here. Widen it after testing against the new release,
+    # not before.
+    "coactra>=0.5.0,<0.6",
 ]
 
 [project.optional-dependencies]
