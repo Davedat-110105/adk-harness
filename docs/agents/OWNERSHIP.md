@@ -18,6 +18,7 @@ repository files under normal review, not held by anyone.
 | `agent.py`, `tests/test_agent.py` | integrator | task 3 — done |
 | `fleet.py`, `tests/test_fleet.py`, `tests/test_fleet_live.py` | integrator | task 4 — done |
 | `examples/fleet/` | integrator | Cloud Run deployment target |
+| `adapters/antigravity.py`, `tests/test_adapter_antigravity.py` | integrator | [task 7](TASKS.md) — done |
 
 ## In flight — already assigned, do not edit this table
 
@@ -46,6 +47,10 @@ The integrator is currently working in `governance.py`, `fleet.py`, and
 
 Installing a package into `.venv` for your own task is fine — that is local
 state, not a shared file. Adding it to `pyproject.toml` is not.
+
+The `antigravity` extra in `pyproject.toml`, the `AntigravityHarness` export,
+the CI degrades-cleanly loop and the README rows were wired by the integrator
+alongside task 7, which is the only reason those frozen files moved.
 
 ## Rules
 

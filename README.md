@@ -2,10 +2,11 @@
 
 Turn any coding-agent harness into a governed Google ADK agent.
 
-Claude Code, Codex, and opencode have nothing in common — one is a Python SDK,
-one is a CLI, one is an HTTP server. `adk-harness` puts all three behind a single
-protocol, presents each as a Google ADK agent, and routes a Gemini orchestrator
-across them while one policy gate sees every tool call before it runs.
+Claude Code, Codex, opencode, and Google Antigravity have nothing in common —
+a Python SDK over a CLI, a CLI subprocess, an HTTP server, and a Python SDK over
+a bundled compiled runtime. `adk-harness` puts all four behind a single protocol,
+presents each as a Google ADK agent, and routes a Gemini orchestrator across them
+while one policy gate sees every tool call before it runs.
 
 It is a library. There is no service to run and no web app to deploy — you
 `pip install` it and import it.
@@ -133,11 +134,12 @@ flowchart TB
         agents["HarnessAgent<br/>one per available harness"]
     end
 
-    subgraph harnesses["Harnesses — three integration shapes"]
+    subgraph harnesses["Harnesses — four integration shapes"]
         direction LR
         hc["claude-code<br/><i>Python SDK</i>"]
         hx["codex<br/><i>CLI subprocess</i>"]
         ho["opencode<br/><i>HTTP + OpenAPI</i>"]
+        ha["antigravity<br/><i>Python SDK + bundled runtime</i>"]
     end
 
     subgraph gcp["Google Cloud"]
@@ -154,7 +156,7 @@ flowchart TB
     gate -->|"requires_approval"| pause
     pause --> agents
 
-    agents --> hc & hx & ho
+    agents --> hc & hx & ho & ha
 
     orch -.->|"model calls"| vertex
     adk -.->|"state that outlives the process"| engine
@@ -205,7 +207,12 @@ have not installed reports `available=False` instead of failing an import.
 pip install adk-harness                  # protocol, registry, governance
 pip install "adk-harness[claude-code]"   # + claude-agent-sdk
 pip install "adk-harness[opencode]"      # + httpx for the opencode server
+pip install "adk-harness[antigravity]"   # + google-antigravity
 ```
+
+The Antigravity SDK ships its `localharness` runtime inside a platform wheel, so
+install it from PyPI — a source checkout imports but has nothing to run, and the
+adapter reports `available=False` saying exactly that.
 
 Codex needs no extra — it is driven as a subprocess, so install the `codex` CLI
 yourself and `adk-harness` will discover it.
@@ -278,14 +285,18 @@ Five rules, stated in full in [docs/agents/CONTRACT.md](docs/agents/CONTRACT.md)
 |---|---|---|
 | Codex | CLI subprocess | Implemented |
 | Claude Code | Python SDK | Implemented |
+| Antigravity | Python SDK + bundled runtime | Implemented |
 | opencode | HTTP + OpenAPI | Planned |
 | Hermes Agent | — | Not planned for v1 |
 | DeepSeek Harness | — | Not planned for v1 |
 
 Hermes Agent and DeepSeek Harness are general agent runtimes rather than
 coding-first agents, and DeepSeek Harness is a v0.1 developer preview that
-guarantees breaking changes. Two adapters across two genuinely different
-integration shapes prove more about the protocol than five shallow ones would.
+guarantees breaking changes. Adapters across genuinely different integration
+shapes prove more about the protocol than a row of shallow ones would — which is
+the whole reason Antigravity was worth adding: it is a Python SDK like Claude
+Code, but one that drives a compiled runtime bundled in its own wheel rather
+than a CLI on your PATH, so `discover()` has a third thing to be honest about.
 
 ## License
 
