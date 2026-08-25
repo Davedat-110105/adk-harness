@@ -133,7 +133,8 @@ async def main() -> int:
         confirmed_by="dave",
     )
     print(f"  precedent: {precedent.precedent_id}")
-    print(f"  scope:     {[f'{a.field} {a.operator} {a.value!r}' for a in precedent.applicability]}")
+    scope = [f"{a.field} {a.operator} {a.value!r}" for a in precedent.applicability]
+    print(f"  scope:     {scope}")
     print("  note:      applicability is passed explicitly, never inferred from the answer")
 
     before = len(gate.audit)

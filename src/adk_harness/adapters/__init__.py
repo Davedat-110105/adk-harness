@@ -12,6 +12,6 @@ satisfy the same contract is evidence that the contract is real.
 
 from adk_harness.adapters.claude_code import ClaudeCodeHarness
 from adk_harness.adapters.codex import CodexHarness
-from adk_harness.adapters.opencode import OpencodeHarness
+from adk_harness.adapters.opencode import OpenCodeHarness
 
-__all__ = ["ClaudeCodeHarness", "CodexHarness", "OpencodeHarness"]
+__all__ = ["ClaudeCodeHarness", "CodexHarness", "OpenCodeHarness"]

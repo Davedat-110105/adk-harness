@@ -142,20 +142,48 @@ async def test_discover_nonzero_exit(monkeypatch: pytest.MonkeyPatch) -> None:
 # --- run() kind mapping ---------------------------------------------------
 
 
-def _line(msg: dict[str, Any]) -> bytes:
-    return (json.dumps({"id": "t0", "msg": msg}) + "\n").encode()
+def _line(event: dict[str, Any]) -> bytes:
+    """One stdout line in the envelope codex actually emits.
+
+    The previous version of this helper wrapped everything as
+    `{"id": ..., "msg": {...}}`, which the vendor has never produced. Eleven
+    tests passed against it while the adapter yielded zero turns from a real
+    run. The shape below is taken from tests/fixtures/codex_exec_real.jsonl,
+    captured from codex-cli 0.149.1 — see tests/test_adapter_codex_capture.py.
+    """
+    return (json.dumps(event) + "\n").encode()
+
+
+def _item(event_type: str, item: dict[str, Any]) -> bytes:
+    return _line({"type": event_type, "item": item})
 
 
 @pytest.mark.asyncio
 async def test_run_maps_every_turn_kind(monkeypatch: pytest.MonkeyPatch) -> None:
     lines = [
-        _line({"type": "session_configured"}),  # dropped: banner
-        _line({"type": "agent_message", "message": "hello there"}),
-        _line({"type": "exec_command_begin", "call_id": "c1", "command": ["ls", "-la"]}),
-        _line({"type": "exec_command_end", "call_id": "c1", "stdout": "a.txt\n", "exit_code": 0}),
-        _line({"type": "token_count", "input_tokens": 10, "output_tokens": 5}),
-        _line({"type": "agent_message_delta", "delta": "hel"}),  # dropped: delta
-        _line({"type": "task_complete", "last_agent_message": "hello there"}),  # dropped
+        _line({"type": "thread.started", "thread_id": "t0"}),  # dropped: no content
+        _line({"type": "turn.started"}),  # dropped: no content
+        _item("item.completed", {"id": "i0", "type": "agent_message", "text": "hello there"}),
+        _item(
+            "item.started",
+            {"id": "i1", "type": "command_execution", "command": "ls -la", "status": "in_progress"},
+        ),
+        _item(
+            "item.completed",
+            {
+                "id": "i1",
+                "type": "command_execution",
+                "command": "ls -la",
+                "aggregated_output": "a.txt\n",
+                "exit_code": 0,
+                "status": "completed",
+            },
+        ),
+        _item(
+            "item.completed",
+            {"id": "i2", "type": "error", "message": "Under-development features enabled"},
+        ),  # dropped: a startup notice, not a failure
+        _line({"type": "turn.completed", "usage": {"input_tokens": 10, "output_tokens": 5}}),
     ]
     process = FakeProcess(stdout_lines=lines, returncode=0)
     _patch_subprocess(monkeypatch, process)
@@ -168,11 +196,11 @@ async def test_run_maps_every_turn_kind(monkeypatch: pytest.MonkeyPatch) -> None
 
     text_turn = turns[0]
     assert text_turn.text == "hello there"
-    assert text_turn.raw["msg"]["type"] == "agent_message"
+    assert text_turn.raw["item"]["type"] == "agent_message"
 
     call_turn = turns[1]
-    assert call_turn.tool_name == "ls -la"  # falls back to the command list
-    assert call_turn.tool_args["call_id"] == "c1"
+    assert call_turn.tool_name == "ls -la"
+    assert call_turn.tool_args["status"] == "in_progress"
 
     result_turn = turns[2]
     assert result_turn.text == "a.txt\n"
@@ -188,7 +216,7 @@ async def test_run_maps_every_turn_kind(monkeypatch: pytest.MonkeyPatch) -> None
 
 @pytest.mark.asyncio
 async def test_run_error_event_maps_to_error_kind(monkeypatch: pytest.MonkeyPatch) -> None:
-    lines = [_line({"type": "error", "message": "model unavailable"})]
+    lines = [_item("item.completed", {"id": "i", "type": "error", "message": "model unavailable"})]
     process = FakeProcess(stdout_lines=lines, returncode=0)
     _patch_subprocess(monkeypatch, process)
     harness = CodexHarness()
@@ -204,7 +232,7 @@ async def test_run_error_event_maps_to_error_kind(monkeypatch: pytest.MonkeyPatc
 async def test_run_nonzero_exit_yields_error_turn_not_exception(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    lines = [_line({"type": "agent_message", "message": "partial work"})]
+    lines = [_item("item.completed", {"id": "i", "type": "agent_message", "text": "partial work"})]
     process = FakeProcess(
         stdout_lines=lines, stderr_lines=[b"boom: sandbox denied\n"], returncode=1
     )
@@ -237,7 +265,10 @@ async def test_run_uses_resume_when_session_id_given(monkeypatch: pytest.MonkeyP
 async def test_run_malformed_json_line_is_dropped_not_raised(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    lines = [b"not json at all\n", _line({"type": "agent_message", "message": "ok"})]
+    lines = [
+        b"not json at all\n",
+        _item("item.completed", {"id": "i", "type": "agent_message", "text": "ok"}),
+    ]
     process = FakeProcess(stdout_lines=lines, returncode=0)
     _patch_subprocess(monkeypatch, process)
     harness = CodexHarness()
@@ -262,7 +293,10 @@ async def test_aclose_mid_stream_terminates_and_is_idempotent(
             return self
 
         async def __anext__(self) -> bytes:
-            return _line({"type": "agent_message", "message": "still going"})
+            return _item(
+                "item.completed",
+                {"id": "i", "type": "agent_message", "text": "still going"},
+            )
 
     process = FakeProcess(returncode=0)
     process.stdout = _NeverEndingStream()

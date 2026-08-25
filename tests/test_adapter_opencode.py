@@ -9,7 +9,7 @@ from typing import Any, ClassVar
 
 import pytest
 
-from adk_harness.adapters.opencode import OpencodeHarness
+from adk_harness.adapters.opencode import OpenCodeHarness
 
 
 class _Response:
@@ -90,7 +90,7 @@ def _sse(event: dict[str, Any]) -> str:
 async def test_discover_health_and_version(monkeypatch: pytest.MonkeyPatch) -> None:
     _fake_httpx(monkeypatch)
 
-    spec = await OpencodeHarness().discover()
+    spec = await OpenCodeHarness().discover()
 
     assert spec.available is True
     assert spec.id == "opencode"
@@ -106,7 +106,7 @@ async def test_discover_unavailable_without_server(monkeypatch: pytest.MonkeyPat
 
     monkeypatch.setitem(sys.modules, "httpx", SimpleNamespace(AsyncClient=FailingClient))
 
-    spec = await OpencodeHarness().discover()
+    spec = await OpenCodeHarness().discover()
 
     assert spec.available is False
     assert "connection refused" in (spec.detail or "")
@@ -116,7 +116,7 @@ async def test_discover_unavailable_without_server(monkeypatch: pytest.MonkeyPat
 async def test_discover_reports_missing_httpx(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setitem(sys.modules, "httpx", None)
 
-    spec = await OpencodeHarness().discover()
+    spec = await OpenCodeHarness().discover()
 
     assert spec.available is False
     assert "httpx" in (spec.detail or "")
@@ -187,7 +187,7 @@ async def test_run_maps_sse_events_to_all_turn_kinds(monkeypatch: pytest.MonkeyP
         ]
     )
 
-    turns = [turn async for turn in OpencodeHarness().run("do it", cwd="/repo")]
+    turns = [turn async for turn in OpenCodeHarness().run("do it", cwd="/repo")]
 
     assert [turn.kind for turn in turns] == ["text", "tool_call", "tool_result", "usage", "error"]
     assert turns[0].text == "hello"
@@ -209,7 +209,7 @@ async def test_run_uses_existing_session_and_sends_prompt(monkeypatch: pytest.Mo
 
     turns = [
         turn
-        async for turn in OpencodeHarness(model="provider/model", agent="build").run(
+        async for turn in OpenCodeHarness(model="provider/model", agent="build").run(
             "continue", cwd="/repo", session_id="existing"
         )
     ]
@@ -227,7 +227,7 @@ async def test_run_uses_existing_session_and_sends_prompt(monkeypatch: pytest.Mo
 @pytest.mark.asyncio
 async def test_aclose_is_idempotent(monkeypatch: pytest.MonkeyPatch) -> None:
     _fake_httpx(monkeypatch)
-    harness = OpencodeHarness()
+    harness = OpenCodeHarness()
 
     await harness.aclose()
     await harness.aclose()

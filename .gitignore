@@ -3,3 +3,6 @@ __pycache__/
 .venv/
 dist/
 .DS_Store
+
+# Agent audit output — working notes, not part of the library
+docs/audits/

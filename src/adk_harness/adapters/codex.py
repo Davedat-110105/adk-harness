@@ -97,55 +97,82 @@ _ERROR_TYPES = frozenset({"error", "stream_error", "turn_aborted"})
 
 # Candidate keys tried in order to find human-readable text in a payload whose
 # exact field names were not confirmed against a live run (see module
-# docstring). First match wins; if none match, the payload is stringified.
-_TEXT_KEYS = ("message", "text", "reason", "last_agent_message", "delta")
+# Startup notices arrive as item type "error" but are warnings about local
+# config, not failures: unstable-feature banners, hook-config complaints,
+# skill-budget notes. Treating them as kind="error" would make every healthy
+# run look failed, so they are dropped. A genuine failure surfaces as a
+# non-zero exit, which `run()` reports separately.
+_BENIGN_ERROR_MARKERS = (
+    "Under-development features",
+    "loading hooks from both",
+    "clamping ",
+    "Skill descriptions were shortened",
+)
 
-# Candidate keys for a tool/command name.
-_NAME_KEYS = ("tool", "name", "command", "server")
 
-
-def _first_str(payload: dict[str, Any], keys: tuple[str, ...]) -> str | None:
-    for key in keys:
-        value = payload.get(key)
-        if isinstance(value, str) and value:
-            return value
-        if isinstance(value, list) and value and all(isinstance(v, str) for v in value):
-            return " ".join(value)
-    return None
+def _is_benign(message: str) -> bool:
+    return any(marker in message for marker in _BENIGN_ERROR_MARKERS)
 
 
 def _event_to_turn(event: dict[str, Any]) -> HarnessTurn | None:
-    """Map one decoded JSONL line onto a `HarnessTurn`, or drop it (None)."""
-    msg = event.get("msg")
-    if not isinstance(msg, dict):
+    """Map one decoded JSONL line onto a `HarnessTurn`, or drop it (None).
+
+    The envelope is `{"type": <event>, ...}`. Content arrives inside
+    `item.started` / `item.completed` under an `item` object carrying its own
+    `type`. See the module docstring for the captured sample this is written
+    against.
+    """
+    event_type = event.get("type")
+    if not isinstance(event_type, str):
         return None
-    kind_tag = msg.get("type")
-    if not isinstance(kind_tag, str):
+
+    if event_type == "turn.completed":
+        usage = event.get("usage")
+        if isinstance(usage, dict):
+            summary = ", ".join(f"{k}={v}" for k, v in usage.items())
+            return HarnessTurn(kind="usage", text=summary, tool_args=dict(usage), raw=event)
         return None
 
-    payload_args = {k: v for k, v in msg.items() if k != "type"}
+    if event_type == "turn.failed":
+        error = event.get("error")
+        text = error.get("message") if isinstance(error, dict) else str(error)
+        return HarnessTurn(kind="error", text=text or "turn failed", raw=event)
 
-    if kind_tag in _TEXT_TYPES:
-        text = _first_str(msg, _TEXT_KEYS) or ""
-        return HarnessTurn(kind="text", text=text, raw=event)
+    if event_type not in ("item.started", "item.completed"):
+        # thread.started, turn.started and friends carry no content.
+        return None
 
-    if kind_tag in _TOOL_CALL_TYPES:
-        name = _first_str(msg, _NAME_KEYS) or kind_tag
-        return HarnessTurn(kind="tool_call", tool_name=name, tool_args=payload_args, raw=event)
+    item = event.get("item")
+    if not isinstance(item, dict):
+        return None
+    item_type = item.get("type")
+    args = {k: v for k, v in item.items() if k != "type"}
 
-    if kind_tag in _TOOL_RESULT_TYPES:
-        name = _first_str(msg, _NAME_KEYS) or kind_tag
-        text = _first_str(msg, ("stdout", "output", "result", "text"))
+    if item_type == "agent_message":
+        return HarnessTurn(kind="text", text=item.get("text") or "", raw=event)
+
+    if item_type in ("reasoning", "agent_reasoning"):
+        text = item.get("text") or item.get("summary") or ""
+        return HarnessTurn(kind="text", text=str(text), raw=event) if text else None
+
+    if item_type == "error":
+        message = str(item.get("message") or "")
+        if _is_benign(message):
+            return None
+        return HarnessTurn(kind="error", text=message, raw=event)
+
+    if item_type in ("command_execution", "mcp_tool_call", "file_change", "web_search"):
+        name = str(item.get("command") or item.get("tool") or item.get("server") or item_type)
+        if event_type == "item.started":
+            return HarnessTurn(kind="tool_call", tool_name=name, tool_args=args, raw=event)
+        text = item.get("aggregated_output") or item.get("output") or item.get("result")
         return HarnessTurn(
-            kind="tool_result", tool_name=name, text=text, tool_args=payload_args, raw=event
+            kind="tool_result",
+            tool_name=name,
+            text=str(text) if text is not None else None,
+            tool_args=args,
+            raw=event,
         )
-
-    if kind_tag in _USAGE_TYPES:
-        return HarnessTurn(kind="usage", tool_args=payload_args, raw=event)
-
-    if kind_tag in _ERROR_TYPES:
-        text = _first_str(msg, _TEXT_KEYS) or kind_tag
-        return HarnessTurn(kind="error", text=text, raw=event)
 
     return None
 

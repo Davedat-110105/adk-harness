@@ -32,7 +32,7 @@ from typing import Any
 
 from adk_harness.protocol import HarnessSpec, HarnessTurn
 
-__all__ = ["OpencodeHarness"]
+__all__ = ["OpenCodeHarness"]
 
 
 def _text(value: Any) -> str | None:
@@ -201,7 +201,7 @@ def _event_to_turn(  # noqa: PLR0915
     return None, False
 
 
-class OpencodeHarness:
+class OpenCodeHarness:
     """Stream an already-running OpenCode server over its HTTP API."""
 
     def __init__(

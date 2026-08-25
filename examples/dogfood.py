@@ -39,7 +39,7 @@ from google.adk.sessions import InMemorySessionService
 from google.genai import types
 
 from adk_harness import HarnessRegistry, SQLitePrecedentStore, build_fleet
-from adk_harness.adapters import ClaudeCodeHarness, CodexHarness, OpencodeHarness
+from adk_harness.adapters import ClaudeCodeHarness, CodexHarness, OpenCodeHarness
 
 # Matched against the instruction, not against a path. A fleet dispatch resolves
 # to one working directory, so a rule reading only the resource would answer
@@ -85,7 +85,10 @@ class RepoPolicy:
         if sensitive is not None:
             return Decision(
                 outcome=DecisionOutcome.requires_approval,
-                reason=f"The instruction mentions {sensitive!r}, which reaches outside this machine.",
+                reason=(
+                    f"The instruction mentions {sensitive!r}, which reaches "
+                    "outside this machine."
+                ),
                 source="repo-policy",
             )
 
@@ -118,7 +121,7 @@ async def main() -> int:
     store = SQLitePrecedentStore(args.precedents) if args.precedents else None
 
     registry = HarnessRegistry(
-        [CodexHarness(), ClaudeCodeHarness(), OpencodeHarness()]
+        [CodexHarness(), ClaudeCodeHarness(), OpenCodeHarness()]
     )
     kwargs = {"model": args.model} if args.model else {}
     fleet = await build_fleet(
