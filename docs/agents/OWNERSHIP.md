@@ -19,12 +19,15 @@ repository files under normal review, not held by anyone.
 | `fleet.py`, `tests/test_fleet.py`, `tests/test_fleet_live.py` | integrator | task 4 — done |
 | `examples/fleet/` | integrator | Cloud Run deployment target |
 
-## Open — claim one by editing this table before you start
+## In flight — already assigned, do not edit this table
 
-| Files | Task | Notes |
-|---|---|---|
-| `adapters/opencode.py`, `tests/test_adapter_opencode.py` | [task 5](TASKS.md) | third integration shape: HTTP + OpenAPI |
-| `stores.py`, `tests/test_stores.py` | [task 6](TASKS.md) | persistent precedents; do **not** edit `precedent.py` |
+Two agents are working right now. Their claims are recorded here by the
+integrator so that neither has to edit this file and collide with the other.
+
+| Files | Owner | Task | Notes |
+|---|---|---|---|
+| `adapters/opencode.py`, `tests/test_adapter_opencode.py` | codex-luna | [task 5](TASKS.md) | third integration shape: HTTP + OpenAPI |
+| `stores.py`, `tests/test_stores.py` | codex-luna | [task 6](TASKS.md) | persistent precedents; do **not** edit `precedent.py` |
 
 The integrator is currently working in `governance.py`, `fleet.py`, and
 `examples/fleet/`. Those are live — do not edit them.
