@@ -114,6 +114,19 @@ class CoactraGovernance(BasePlugin):
     ) -> dict[str, Any] | None:
         """Consult precedent before spending a human interruption.
 
+        Returning a dict here is not decoration — it is what stops the tool.
+        `request_confirmation()` only records a request on the event actions
+        (see `ToolContext.request_confirmation`); it does not halt anything. ADK
+        runs the tool whenever `before_tool_callback` returns `None`
+        (`flows/llm_flows/functions.py`, step 3). Asking a human and returning
+        `None` would therefore ask *and* proceed, which is the worst of both:
+        an approval prompt that changes nothing.
+
+        Returning a response also produces the function-response event that
+        ADK's `generate_request_confirmation_event` needs in order to surface
+        the pending confirmation to the client. So the dict is both the brake
+        and the signal.
+
         This is the whole point of the system. Policy has said a human must
         decide. If a human already decided this exact question, under
         conditions that still hold, asking again is noise.
@@ -147,7 +160,11 @@ class CoactraGovernance(BasePlugin):
             hint=_hint(tool.name, match.outcome, match.reason),
             payload={"tool_args": tool_args, "facts": facts},
         )
-        return None
+        return {
+            "status": "awaiting_confirmation",
+            "reason": match.reason or "a human must approve this",
+            "tool": tool.name,
+        }
 
     def remember(
         self,

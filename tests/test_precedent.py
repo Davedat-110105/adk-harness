@@ -169,8 +169,15 @@ async def test_asks_once_then_stops_asking() -> None:
     args = {"publicly_exposed": True, "stateful": True, "service": "checkout"}
 
     first = await gate.before_tool_callback(tool=tool, tool_args=args, tool_context=ctx)
-    assert first is None
     assert len(ctx.confirmations) == 1, "the first call must ask"
+    # And the work must not happen while the question is outstanding. ADK runs
+    # the tool whenever before_tool_callback returns None, so asking a human and
+    # returning None would ask and proceed anyway.
+    assert first == {
+        "status": "awaiting_confirmation",
+        "reason": "no precedent covers these facts",
+        "tool": "apply_patch",
+    }
 
     gate.remember(
         tool_name="apply_patch",
@@ -187,7 +194,7 @@ async def test_asks_once_then_stops_asking() -> None:
     second = await gate.before_tool_callback(
         tool=tool, tool_args=dict(args, service="billing"), tool_context=ctx
     )
-    assert second is None
+    assert second is None, "precedent applies, so the tool runs without asking"
     assert len(ctx.confirmations) == 1, "the second call must not ask again"
 
     outcomes = [r.outcome for r in gate.audit]

@@ -142,3 +142,30 @@ async def test_requires_approval_with_no_precedent_asks_a_human() -> None:
     assert len(context.confirmations) == 1
     assert "No precedent covers this yet" in context.confirmations[0]["hint"]
     assert "asked_human" in [r.outcome for r in gate.audit]
+
+
+@pytest.mark.asyncio
+async def test_asking_a_human_also_stops_the_tool() -> None:
+    """The brake and the question are the same return value.
+
+    `request_confirmation()` only records a request on the event actions; it
+    halts nothing. ADK runs the tool whenever `before_tool_callback` returns
+    `None` (`flows/llm_flows/functions.py`, step 3). So a gate that asks and
+    returns `None` asks *and* proceeds — an approval prompt that changes
+    nothing, which is worse than no prompt at all because it looks like
+    oversight.
+    """
+    gate = CoactraGovernance(
+        policy=RecordingPolicy(DecisionOutcome.requires_approval),
+        scope=SCOPE,
+        resources={"run_demo": "/workspace/prod"},
+    )
+    context = FakeToolContext()
+
+    result = await gate.before_tool_callback(
+        tool=FakeTool("run_demo"), tool_args={}, tool_context=context
+    )
+
+    assert result is not None, "returning None would let the work proceed"
+    assert result["status"] == "awaiting_confirmation"
+    assert context.confirmations, "the human still has to be asked"
