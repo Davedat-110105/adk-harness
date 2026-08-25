@@ -1,4 +1,9 @@
-# Installed into the Cloud Run container. adk-harness is not on PyPI yet, so it
-# comes straight from the public repo; coactra and google-adk arrive as its
-# transitive dependencies.
-adk-harness @ git+https://github.com/Davedat-110105/adk-harness.git@main
+# Installed into the Cloud Run container.
+#
+# adk-harness is not on PyPI yet, so it comes from the public repo. Note this is
+# an HTTPS tarball, not `git+https://` — ADK generates a `python:3.11-slim`
+# Dockerfile, and slim images have no git binary, so a git URL fails the build.
+# codeload serves the same tree over plain HTTPS, which pip can fetch unaided.
+#
+# coactra and google-adk arrive as transitive dependencies.
+https://github.com/Davedat-110105/adk-harness/archive/refs/heads/main.tar.gz
