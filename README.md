@@ -11,18 +11,50 @@ It is a library. There is no service to run and no web app to deploy — you
 `pip install` it and import it.
 
 ```python
-from adk_harness import build_fleet
-from coactra import Policy
+import asyncio
 
-fleet = build_fleet(
-    policy=Policy.default_deny(),
-    model="gemini-3.5-flash",
-    harnesses=["claude-code", "codex"],
-)
+from adk_harness import HarnessRegistry, build_fleet
+from adk_harness.adapters import ClaudeCodeHarness, CodexHarness
+from coactra import Policy, Scope
+from google.adk.runners import Runner
+from google.adk.sessions import InMemorySessionService
+from google.genai import types
 
-async for turn in fleet.run("Fix the failing tests in ./api", cwd="./api"):
-    print(turn)
+
+async def main() -> None:
+    fleet = await build_fleet(
+        registry=HarnessRegistry([ClaudeCodeHarness(), CodexHarness()]),
+        policy=Policy.default_deny(),
+        scope=Scope(tenant_id="acme", namespace="fleet"),
+        cwd="./api",
+    )
+    print("available:", fleet.available_ids)
+
+    session_service = InMemorySessionService()
+    runner = Runner(app=fleet.app, session_service=session_service)
+    await session_service.create_session(
+        app_name=fleet.app.name, user_id="u", session_id="s"
+    )
+    message = types.Content(
+        role="user", parts=[types.Part(text="Fix the failing tests in ./api")]
+    )
+    async for event in runner.run_async(
+        user_id="u", session_id="s", new_message=message
+    ):
+        if event.content and event.content.parts:
+            for part in event.content.parts:
+                if part.text:
+                    print(part.text)
+
+    for record in fleet.governance.audit:
+        print(record.outcome, record.tool_name, record.reason)
+
+
+asyncio.run(main())
 ```
+
+A harness you have not installed reports `available=False` and is simply left
+out of the fleet — nothing raises.
 
 ## Why
 
@@ -164,14 +196,16 @@ class Harness(Protocol):
     async def aclose(self) -> None: ...
 ```
 
-Four rules:
+Five rules, stated in full in [docs/agents/CONTRACT.md](docs/agents/CONTRACT.md):
 
 1. An adapter never decides whether an action is permitted. It streams turns; the
    governance plugin decides.
 2. Import your vendor SDK inside `discover()`, never at module import time, so a
    missing harness degrades to `available=False`.
-3. `HarnessTurn.raw` is opaque. The core never branches on vendor payload shape.
-4. `run()` streams. No adapter buffers a whole session.
+3. `discover()` must not raise. A missing or broken harness reports
+   `available=False` with the reason in `detail`.
+4. `HarnessTurn.raw` is opaque. The core never branches on vendor payload shape.
+5. `run()` streams. No adapter buffers a whole session.
 
 ## Status and roadmap
 

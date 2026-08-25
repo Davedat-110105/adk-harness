@@ -19,9 +19,12 @@ See `agent.py` for exactly what the gate does and does not cover.
 
 from __future__ import annotations
 
+import asyncio
 import re
 from collections.abc import Sequence
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
+from typing import Any
 
 from coactra import Policy, Scope
 from google.adk.agents.llm_agent import LlmAgent
@@ -34,7 +37,7 @@ from adk_harness.precedent import PrecedentStore
 from adk_harness.protocol import HarnessSpec
 from adk_harness.registry import HarnessRegistry
 
-__all__ = ["Fleet", "build_fleet", "DEFAULT_MODEL"]
+__all__ = ["Fleet", "build_fleet", "build_fleet_sync", "DEFAULT_MODEL"]
 
 DEFAULT_MODEL = "gemini-3.5-flash"
 """Resolves only on the `global` Vertex location. Set GOOGLE_CLOUD_LOCATION=global."""
@@ -169,3 +172,26 @@ def _instruction(specs: Sequence[HarnessSpec], cwd: str) -> str:
         "work to a different harness, and do not look for another way to achieve "
         "it. If the gate instead asks a human to confirm, wait for the answer."
     )
+
+
+def build_fleet_sync(**kwargs: Any) -> Fleet:
+    """Build a fleet from a module-level import.
+
+    ADK's deployment convention is to `import` a module and read `app` off it,
+    which means the fleet has to exist before anything awaits. Discovery is
+    async — it probes several harnesses concurrently — so this bridges the two.
+
+    If a loop is already running (ADK's web server loads agent modules from
+    inside one), `asyncio.run` would raise, so the build is handed to a worker
+    thread. Discovery is I/O against local binaries, so a thread is the right
+    shape for it and the wait is short.
+
+    Prefer `build_fleet` anywhere you can already await.
+    """
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return asyncio.run(build_fleet(**kwargs))
+
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        return pool.submit(lambda: asyncio.run(build_fleet(**kwargs))).result()
