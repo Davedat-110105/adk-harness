@@ -236,9 +236,16 @@ class CodexHarness:
         session_id: str | None,
     ) -> AsyncIterator[HarnessTurn]:
         args: list[str] = ["exec"]
-        if session_id is not None:
+        resuming = session_id is not None
+        if resuming:
             args += ["resume", session_id]
-        args += ["--json", "-C", cwd]
+        args += ["--json"]
+        # `codex exec` takes -C/--cd, but `codex exec resume` does not — it
+        # rejects it outright with "unexpected argument '-C' found". The
+        # subprocess is spawned with cwd=cwd either way, so the resume path
+        # inherits the same working directory without the flag.
+        if not resuming:
+            args += ["-C", cwd]
         if self._model is not None:
             args += ["-m", self._model]
         if self._sandbox is not None:

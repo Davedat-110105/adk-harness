@@ -12,13 +12,14 @@ license = { text = "MIT" }
 keywords = ["adk", "gemini", "agents", "claude-code", "codex", "opencode"]
 dependencies = [
     "google-adk[db]>=2.7,<3",
-    # Upper bound deliberately. coactra is under active refactoring in its own
-    # repository — the workflow package was already deleted, and a layer rename
-    # is planned — so an unbounded pin means a coactra release could break
-    # `pip install adk-harness` for someone installing it tomorrow, without a
-    # single line changing here. Widen it after testing against the new release,
-    # not before.
-    "coactra>=0.5.0,<0.6",
+    # Bounded deliberately, and widened only after testing. coactra is pre-1.0
+    # alpha and ships breaking changes without shims — 0.6.0 renamed
+    # coactra.agent.adapters to coactra.agent.backends — so an unbounded pin
+    # means a coactra release could break `pip install adk-harness` without a
+    # line changing here. The floor is 0.6.0 because that is what has been
+    # verified: offline suite, lint, types, and the live Vertex tests all pass
+    # against it. Widen the ceiling the same way, not in anticipation.
+    "coactra>=0.6.0,<0.7",
 ]
 
 [project.optional-dependencies]

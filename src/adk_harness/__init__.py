@@ -11,6 +11,7 @@ from adk_harness.precedent import (
 )
 from adk_harness.protocol import Harness, HarnessSpec, HarnessTurn
 from adk_harness.registry import HarnessRegistry
+from adk_harness.stores import SQLitePrecedentStore
 
 __all__ = [
     "Applicability",
@@ -25,6 +26,7 @@ __all__ = [
     "MatchOutcome",
     "Precedent",
     "PrecedentStore",
+    "SQLitePrecedentStore",
     "build_fleet",
     "build_fleet_sync",
 ]

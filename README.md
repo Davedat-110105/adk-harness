@@ -66,6 +66,10 @@ touching production config" and have every agent obey it.
 `adk-harness` makes that place exist. Policy is evaluated once, in one plugin,
 before any harness acts — regardless of which vendor is doing the work.
 
+> **Want to see it work without running it?** [docs/PROOF.md](docs/PROOF.md)
+> has captured output from real runs — the precedent loop against live Gemini,
+> and all three governance outcomes against a deployed Cloud Run service.
+
 ## The precedent loop
 
 A policy that says "a human must decide" is correct and expensive. Ask a person

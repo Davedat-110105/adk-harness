@@ -65,6 +65,18 @@ class HarnessAgent(BaseAgent):
             "argument rather than something inferred from the process."
         ),
     )
+    session_id: str | None = Field(
+        default=None,
+        description=(
+            "A *vendor* session id to resume, or None to start fresh. This is "
+            "deliberately not ADK's session id. They live in different "
+            "namespaces: passing ADK's id to Claude Code produces 'No "
+            "conversation found with session ID', and to Codex produces a "
+            "resume against a session that was never recorded. A caller who "
+            "genuinely has a vendor session id can pass it; nobody should "
+            "infer one."
+        ),
+    )
     skip_unavailable: bool = Field(
         default=True,
         description=(
@@ -96,7 +108,7 @@ class HarnessAgent(BaseAgent):
 
         try:
             async for turn in self.harness.run(
-                prompt, cwd=self.cwd, session_id=ctx.session.id
+                prompt, cwd=self.cwd, session_id=self.session_id
             ):
                 event = self._event_for_turn(ctx, turn)
                 if event is not None:
