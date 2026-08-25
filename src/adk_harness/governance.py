@@ -51,6 +51,7 @@ class CoactraGovernance(BasePlugin):
         scope: Scope,
         principal: str = "user:local",
         precedents: PrecedentStore | None = None,
+        resources: Mapping[str, str] | None = None,
         name: str = "coactra-governance",
     ) -> None:
         super().__init__(name=name)
@@ -58,6 +59,7 @@ class CoactraGovernance(BasePlugin):
         self._scope = scope
         self._principal = principal
         self._precedents = precedents if precedents is not None else PrecedentStore()
+        self._resources = dict(resources or {})
         self._audit: list[AuditRecord] = []
         self._pending: dict[str, dict[str, Any]] = {}
 
@@ -79,14 +81,15 @@ class CoactraGovernance(BasePlugin):
         tool_context: Any,
     ) -> dict[str, Any] | None:
         action = f"tool:{tool.name}"
+        resource = self._resource_for(tool, tool_args)
         decision = await self._policy.check(
             PolicyRequest(
                 principal=self._principal,
                 action=action,
-                resource=str(tool_args.get("cwd") or tool.name),
+                resource=resource,
                 scope=self._scope,
                 component="adk-harness",
-                context={"tool_args": tool_args},
+                context={"tool_args": tool_args, "resource": resource},
             )
         )
         self._record(tool.name, action, decision.outcome.name, decision.reason)
@@ -199,6 +202,29 @@ class CoactraGovernance(BasePlugin):
             None,
         )
         return None
+
+    def _resource_for(self, tool: Any, tool_args: Mapping[str, Any]) -> str:
+        """Name the thing a policy is actually deciding about.
+
+        A tool that takes `cwd` names its own target, so that wins. But a
+        harness dispatched through ADK's `AgentTool` does not: its arguments are
+        just the instruction text, and the working directory lives on the agent
+        that was wrapped. Without the registered mapping the policy would
+        receive the *tool name* as the resource, and a rule like "must be under
+        /workspace" would reject every dispatch for the wrong reason — a gate
+        that looks like it is working while deciding on the wrong noun.
+
+        `build_fleet` registers `{tool_name: cwd}` for exactly this. Falling
+        back to the tool name is kept only so an unregistered tool still gets a
+        decision rather than a crash.
+        """
+        cwd = tool_args.get("cwd")
+        if cwd:
+            return str(cwd)
+        registered = self._resources.get(tool.name)
+        if registered:
+            return registered
+        return str(tool.name)
 
     def _record(self, tool_name: str, action: str, outcome: str, reason: str | None) -> None:
         self._audit.append(

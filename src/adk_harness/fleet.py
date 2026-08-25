@@ -100,6 +100,9 @@ async def build_fleet(
         scope=scope,
         principal=principal,
         precedents=precedents,
+        # An AgentTool call carries only the instruction text, so the gate
+        # cannot see where the harness will work unless it is told here.
+        resources={_tool_name(h.spec.id): cwd for h in available},
     )
 
     tools = [
