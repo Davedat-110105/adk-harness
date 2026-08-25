@@ -137,6 +137,21 @@ class CoactraGovernance(BasePlugin):
         action = f"tool:{tool.name}"
         ambiguity = _ambiguity_type(tool.name)
         facts = _facts(tool.name, tool_args)
+
+        # A human may already have answered. When ADK resumes a run after a
+        # confirmation, it re-invokes the tool with the answered
+        # `ToolConfirmation` attached, which lands us back here. Without this
+        # check the gate would ask the same question again and the run could
+        # never proceed — the approve button would do nothing.
+        answered = getattr(tool_context, "tool_confirmation", None)
+        if answered is not None and getattr(answered, "confirmed", False):
+            self._pending[tool.name] = {
+                "action": action,
+                "ambiguity_type": ambiguity,
+                "facts": facts,
+            }
+            self._record(tool.name, action, "confirmed_by_human", getattr(answered, "hint", None))
+            return None
         match = self._precedents.match(
             action=action, ambiguity_type=ambiguity, facts=facts
         )

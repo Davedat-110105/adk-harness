@@ -28,7 +28,18 @@ from adk_harness.registry import HarnessRegistry
 
 WORKSPACE = os.environ.get("ADK_HARNESS_WORKSPACE", "/workspace")
 
-SENSITIVE = ("/prod", "/infra", "/deploy", "/.github", "/secrets")
+# Matched against the instruction the orchestrator writes, not against a path:
+# see WorkspacePolicy.check for why the path alone cannot decide anything here.
+SENSITIVE = ("prod", "deploy", "infra", "migration", "release")
+FORBIDDEN = ("secret", "credential", "api key", "password", ".env")
+
+
+def _requested(request: PolicyRequest) -> str:
+    """The instruction text the orchestrator wrote for the harness."""
+    args = request.context.get("tool_args") or {}
+    if not isinstance(args, dict):
+        return ""
+    return " ".join(str(v) for v in args.values() if isinstance(v, str))
 
 
 class WorkspacePolicy:
@@ -63,16 +74,39 @@ class WorkspacePolicy:
                 source="workspace-policy",
             )
 
-        if any(part in resource for part in SENSITIVE):
+        # A fleet dispatch resolves to the fleet's working directory, which is
+        # the same string every time — so a rule that reads only `resource`
+        # would answer identically for every request, which is not a policy.
+        # What varies is the instruction the orchestrator wrote, and that is
+        # what a reviewer would actually read before approving. Coactra puts
+        # the tool arguments on the request context for exactly this.
+        target = _requested(request).lower()
+
+        forbidden = next((word for word in FORBIDDEN if word in target), None)
+        if forbidden is not None:
+            return Decision(
+                outcome=DecisionOutcome.deny,
+                reason=(
+                    f"The instruction mentions {forbidden!r}. Credentials are "
+                    "never edited by an agent in this workspace."
+                ),
+                source="workspace-policy",
+            )
+
+        sensitive = next((word for word in SENSITIVE if word in target), None)
+        if sensitive is not None:
             return Decision(
                 outcome=DecisionOutcome.requires_approval,
-                reason=f"{resource} looks like production configuration.",
+                reason=(
+                    f"The instruction mentions {sensitive!r}, which reads as "
+                    "production configuration. A human decides this one."
+                ),
                 source="workspace-policy",
             )
 
         return Decision(
             outcome=DecisionOutcome.allow,
-            reason=f"{resource} is ordinary source under {self._workspace}.",
+            reason=f"Ordinary source work under {self._workspace}.",
             source="workspace-policy",
         )
 

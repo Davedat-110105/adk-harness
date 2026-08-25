@@ -169,3 +169,52 @@ async def test_asking_a_human_also_stops_the_tool() -> None:
     assert result is not None, "returning None would let the work proceed"
     assert result["status"] == "awaiting_confirmation"
     assert context.confirmations, "the human still has to be asked"
+
+
+class ConfirmedContext(FakeToolContext):
+    """What ADK hands back after a human clicks approve."""
+
+    def __init__(self, confirmed: bool = True) -> None:
+        super().__init__()
+        self.tool_confirmation = type(
+            "Answer", (), {"confirmed": confirmed, "hint": "approved by dave"}
+        )()
+
+
+@pytest.mark.asyncio
+async def test_an_answered_confirmation_lets_the_run_proceed() -> None:
+    """Otherwise the approve button does nothing and the run never finishes.
+
+    ADK resumes by re-invoking the tool with the answered ToolConfirmation
+    attached, which re-enters this gate. A gate that only consults precedent
+    would ask the same question forever.
+    """
+    gate = CoactraGovernance(
+        policy=RecordingPolicy(DecisionOutcome.requires_approval),
+        scope=SCOPE,
+        resources={"run_demo": "/workspace/prod"},
+    )
+    context = ConfirmedContext()
+
+    result = await gate.before_tool_callback(
+        tool=FakeTool("run_demo"), tool_args={}, tool_context=context
+    )
+
+    assert result is None, "an approved call must run"
+    assert context.confirmations == [], "and must not ask again"
+    assert "confirmed_by_human" in [r.outcome for r in gate.audit]
+
+
+@pytest.mark.asyncio
+async def test_an_unanswered_confirmation_still_asks() -> None:
+    gate = CoactraGovernance(
+        policy=RecordingPolicy(DecisionOutcome.requires_approval), scope=SCOPE
+    )
+    context = ConfirmedContext(confirmed=False)
+
+    result = await gate.before_tool_callback(
+        tool=FakeTool("run_demo"), tool_args={}, tool_context=context
+    )
+
+    assert result is not None
+    assert len(context.confirmations) == 1
