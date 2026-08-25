@@ -14,7 +14,6 @@ from typing import Any
 import pytest
 
 from adk_harness.adapters.codex import CodexHarness
-from adk_harness.protocol import HarnessTurn
 
 
 class _FakeStdin:
@@ -38,7 +37,7 @@ class _FakeLineStream:
     def __init__(self, lines: list[bytes]) -> None:
         self._lines = list(lines)
 
-    def __aiter__(self) -> "_FakeLineStream":
+    def __aiter__(self) -> _FakeLineStream:
         return self
 
     async def __anext__(self) -> bytes:
@@ -259,7 +258,7 @@ async def test_aclose_mid_stream_terminates_and_is_idempotent(
     # A stream that never ends on its own, so the generator is still
     # mid-iteration when aclose() is called.
     class _NeverEndingStream:
-        def __aiter__(self) -> "_NeverEndingStream":
+        def __aiter__(self) -> _NeverEndingStream:
             return self
 
         async def __anext__(self) -> bytes:

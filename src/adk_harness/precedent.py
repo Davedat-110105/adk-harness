@@ -18,17 +18,17 @@ from __future__ import annotations
 import hashlib
 import json
 from collections.abc import Iterable, Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Any
 
 __all__ = [
     "Applicability",
-    "Precedent",
-    "PrecedentStore",
     "MatchOutcome",
     "MatchResult",
+    "Precedent",
+    "PrecedentStore",
 ]
 
 

@@ -20,7 +20,7 @@ from google.adk.plugins.base_plugin import BasePlugin
 
 from adk_harness.precedent import MatchOutcome, Precedent, PrecedentStore
 
-__all__ = ["CoactraGovernance", "AuditRecord"]
+__all__ = ["AuditRecord", "CoactraGovernance"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -233,7 +233,6 @@ class CoactraGovernance(BasePlugin):
             "completed_blocked" if blocked else "completed",
             None,
         )
-        return None
 
     def _resource_for(self, tool: Any, tool_args: Mapping[str, Any]) -> str:
         """Name the thing a policy is actually deciding about.

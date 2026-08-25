@@ -192,7 +192,7 @@ class ClaudeCodeHarness:
                 detail=f"claude CLI resolved at {binary}",
             )
             return self.spec
-        except Exception as exc:  # noqa: BLE001 - CONTRACT.md rule 3 requires this to be unconditional
+        except Exception as exc:
             # Belt-and-suspenders backstop for CONTRACT.md rule 3 ("discover()
             # must not raise"): everything above is expected to be safe
             # (PackageNotFoundError is caught explicitly, shutil.which does

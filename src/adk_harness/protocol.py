@@ -11,7 +11,7 @@ from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from typing import Any, Protocol, runtime_checkable
 
-__all__ = ["HarnessSpec", "HarnessTurn", "Harness"]
+__all__ = ["Harness", "HarnessSpec", "HarnessTurn"]
 
 
 @dataclass(frozen=True, slots=True)

@@ -20,19 +20,19 @@ SCOPE = Scope(tenant_id="acme", namespace="fleet")
 
 
 def _precedent(pid: str = "prec_01", **over: Any) -> Precedent:
-    base: dict[str, Any] = dict(
-        precedent_id=pid,
-        action="tool:apply_patch",
-        ambiguity_type="approval_required:apply_patch",
-        applicability=(
+    base: dict[str, Any] = {
+        "precedent_id": pid,
+        "action": "tool:apply_patch",
+        "ambiguity_type": "approval_required:apply_patch",
+        "applicability": (
             Applicability("publicly_exposed", "eq", True),
             Applicability("stateful", "eq", True),
         ),
-        decision={"strategy": "prefer_zero_downtime"},
-        rationale="Public stateful services should avoid visible interruption.",
-        confirmed_by="human:dave",
-        created_at=datetime.now(UTC),
-    )
+        "decision": {"strategy": "prefer_zero_downtime"},
+        "rationale": "Public stateful services should avoid visible interruption.",
+        "confirmed_by": "human:dave",
+        "created_at": datetime.now(UTC),
+    }
     base.update(over)
     return Precedent(**base)
 

@@ -37,7 +37,7 @@ from adk_harness.precedent import PrecedentStore
 from adk_harness.protocol import HarnessSpec
 from adk_harness.registry import HarnessRegistry
 
-__all__ = ["Fleet", "build_fleet", "build_fleet_sync", "DEFAULT_MODEL"]
+__all__ = ["DEFAULT_MODEL", "Fleet", "build_fleet", "build_fleet_sync"]
 
 DEFAULT_MODEL = "gemini-3.5-flash"
 """Resolves only on the `global` Vertex location. Set GOOGLE_CLOUD_LOCATION=global."""
@@ -105,7 +105,9 @@ async def build_fleet(
         resources={_tool_name(h.spec.id): cwd for h in available},
     )
 
-    tools = [
+    # Annotated as the union ADK declares rather than list[AgentTool]: list is
+    # invariant, so the narrower type is not assignable to LlmAgent.tools.
+    tools: list[Any] = [
         AgentTool(
             agent=HarnessAgent(
                 name=_tool_name(harness.spec.id),

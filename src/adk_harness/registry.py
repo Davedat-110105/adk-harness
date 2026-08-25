@@ -74,7 +74,9 @@ class HarnessRegistry:
             return self._harnesses[harness_id]
         except KeyError:
             known = ", ".join(sorted(self._harnesses)) or "none"
-            raise KeyError(f"no harness registered as {harness_id!r}; registered: {known}") from None
+            raise KeyError(
+                f"no harness registered as {harness_id!r}; registered: {known}"
+            ) from None
 
     def __len__(self) -> int:
         return len(self._harnesses)

@@ -37,3 +37,40 @@ packages = ["src/adk_harness"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+# Explicit, so a ruff upgrade cannot change what CI enforces underneath us.
+select = ["E", "F", "I", "UP", "B", "C4", "RET", "RUF", "PL"]
+ignore = [
+    # Contract rule 2 requires adapters to import their vendor SDK *inside*
+    # discover(), never at module level, so that a missing harness degrades to
+    # available=False instead of breaking the import. This rule forbids exactly
+    # the thing the architecture requires.
+    "PLC0415",
+    "PLR0911",  # several early returns is how the policy gate reads best
+    "PLR0912",  # the vendor-event mapping is a wide branch by nature
+    "PLR0913",  # build_fleet genuinely has many keyword arguments
+    "PLR2004",  # comparing against literals is the point of a test
+]
+
+[tool.pyright]
+# Without this, pyright resolves against the system interpreter and reports
+# every third-party import as missing.
+venvPath = "."
+venv = ".venv"
+include = ["src"]
+pythonVersion = "3.12"
+
+[tool.ruff.lint.per-file-ignores]
+# The module docstring carries a markdown table mapping vendor event tags onto
+# HarnessTurn kinds. Wrapping the rows breaks the table, and the table is the
+# most useful thing in the file.
+"src/adk_harness/adapters/codex.py" = ["E501"]
+# These replay real vendor payloads. Reflowing them makes the fixture stop
+# looking like what the vendor actually sends, which is the point of it.
+"tests/test_adapter_codex.py" = ["E501"]
+"tests/test_adapter_claude_code.py" = ["E501"]

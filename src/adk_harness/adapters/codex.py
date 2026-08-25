@@ -310,7 +310,7 @@ class CodexHarness:
             process.terminate()
             try:
                 await asyncio.wait_for(process.wait(), timeout=5)
-            except (TimeoutError, asyncio.TimeoutError):
+            except TimeoutError:
                 process.kill()
                 await process.wait()
         self._process = None
