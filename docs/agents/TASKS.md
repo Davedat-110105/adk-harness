@@ -194,6 +194,41 @@ for the same facts. Use `tmp_path`.
 
 ---
 
+## Task 7 — the Antigravity adapter
+
+**Owner:** integrator — landed
+**Files:** `src/adk_harness/adapters/antigravity.py`,
+`tests/test_adapter_antigravity.py`
+
+Google Antigravity is a fourth integration shape and the only Google-native
+one: a Python SDK that drives a compiled `localharness` binary shipped inside
+its own platform wheel. That last part is why it earns a place rather than
+being a second SDK adapter — "the package imports" and "the runtime exists" are
+two different questions, and `discover()` has to answer both, plus a third
+about credentials.
+
+**What was verified**, against `google-antigravity==0.1.14` installed into
+`.venv`, by reading the source under
+`.venv/Lib/site-packages/google/antigravity/`:
+
+- `Agent.chat()` returns a `ChatResponse` whose `.chunks` cursor is the only
+  **ordered** view of the turn; `.thoughts` and `.tool_calls` are filtered
+  views of it, and `ToolResult` appears on none of them but `.chunks`.
+- `LocalAgentConfig.workspaces` is the file-access boundary and the closest
+  thing the SDK has to `cwd`.
+- `conversation_id` + `session_continuation_mode=RESUME` is genuine resume,
+  but only against a stable `save_dir` — the config mints a throwaway
+  `tempfile.mkdtemp()` otherwise. The adapter advertises `session_resume` only
+  when it was given a `save_dir`, for that reason.
+- Credentials are validated by the SDK's own `ModelEndpoint.validate_endpoint`,
+  which `discover()` calls rather than reimplementing which environment
+  variable means what.
+
+No live `agent.chat()` was run: that spends real Gemini quota, the same line
+task 1 draws for `codex exec`.
+
+---
+
 ## Reporting back
 
 When your task is done, report:

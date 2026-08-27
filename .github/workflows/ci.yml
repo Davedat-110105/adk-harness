@@ -12,9 +12,10 @@ on:
 jobs:
   # The claim this package makes is that a harness you have not installed
   # degrades to `available=False` rather than breaking the import. A CI runner
-  # has no codex binary, no claude binary and no opencode server, so it is the
-  # honest place to check that — and it only checks it if the optional extras
-  # are genuinely absent. Keep this job dependency-free on purpose.
+  # has no codex binary, no claude binary, no opencode server and no
+  # antigravity SDK, so it is the honest place to check that — and it only
+  # checks it if the optional extras are genuinely absent. Keep this job
+  # dependency-free on purpose.
   base-install:
     name: Base install, no harness present
     runs-on: ubuntu-latest
@@ -36,10 +37,14 @@ jobs:
           python - <<'PY'
           import asyncio
 
-          from adk_harness.adapters import ClaudeCodeHarness, CodexHarness
+          from adk_harness.adapters import (
+              AntigravityHarness,
+              ClaudeCodeHarness,
+              CodexHarness,
+          )
 
           async def main() -> None:
-              for harness in (CodexHarness(), ClaudeCodeHarness()):
+              for harness in (CodexHarness(), ClaudeCodeHarness(), AntigravityHarness()):
                   spec = await harness.discover()
                   assert spec.available is False, f"{spec.id} should be absent on a runner"
                   assert spec.detail, f"{spec.id} must say why it is unavailable"

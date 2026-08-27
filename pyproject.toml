@@ -9,7 +9,7 @@ description = "Turn any coding-agent harness into a governed Google ADK agent."
 readme = "README.md"
 requires-python = ">=3.12"
 license = { text = "MIT" }
-keywords = ["adk", "gemini", "agents", "claude-code", "codex", "opencode"]
+keywords = ["adk", "gemini", "agents", "claude-code", "codex", "opencode", "antigravity"]
 dependencies = [
     "google-adk[db]>=2.7,<3",
     # Bounded deliberately, and widened only after testing. coactra is pre-1.0
@@ -25,12 +25,19 @@ dependencies = [
 [project.optional-dependencies]
 claude-code = ["claude-agent-sdk>=0.2,<1"]
 opencode = ["httpx>=0.27"]
+# Bounded at the minor, because 0.1.x is an alpha ("Development Status :: 3")
+# that ships a compiled localharness binary per platform wheel — the Python
+# surface and the wire protocol move together, so a 0.2 is a runtime change and
+# not just an API one. The floor is what has been verified: 0.1.14, against
+# which the offline suite, lint, and types all pass. Its `mcp<2,>=1.0` pin
+# overlaps google-adk's own `mcp>=1.24,<2`, so the two resolve together.
+antigravity = ["google-antigravity>=0.1.14,<0.2"]
 a2a = ["google-adk[a2a]>=2.7,<3"]
 # ADK's --trace_to_cloud imports opentelemetry.exporter.cloud_trace, which lives
 # in google-adk's own `all` extra rather than its `gcp` one. Depending on the
 # exporter directly keeps the Cloud Run image small.
 tracing = ["opentelemetry-exporter-gcp-trace>=1.9,<2"]
-all = ["claude-agent-sdk>=0.2,<1", "httpx>=0.27"]
+all = ["claude-agent-sdk>=0.2,<1", "httpx>=0.27", "google-antigravity>=0.1.14,<0.2"]
 dev = ["pytest>=8", "pytest-asyncio>=0.23", "ruff>=0.8", "pyright>=1.1"]
 
 [tool.hatch.build.targets.wheel]
@@ -75,3 +82,5 @@ pythonVersion = "3.12"
 # looking like what the vendor actually sends, which is the point of it.
 "tests/test_adapter_codex.py" = ["E501"]
 "tests/test_adapter_claude_code.py" = ["E501"]
+# Same reason as codex.py: the module docstring carries the chunk-to-kind table.
+"src/adk_harness/adapters/antigravity.py" = ["E501"]
