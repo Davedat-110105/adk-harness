@@ -97,16 +97,75 @@ And what Gemini then said to the user, rather than retrying:
 
 ---
 
-## 3. Three harnesses, one protocol
+## 3. A real Google Workspace action, gated per operation
 
-Discovery against the machine, not a fixture. Three genuinely different
+The strongest evidence here, because the action is externally visible: an event
+on a real Google Calendar, created only after a person approved it.
+
+```bash
+GOOGLE_CLOUD_PROJECT=your-project python examples/capture_workspace_governance.py
+```
+
+Captured 2026-08-27. Tools are ADK's official `CalendarToolset`, filtered to two
+operations of the 38 it offers:
+
+```
+model:    gemini-3.5-flash
+services: calendar
+tools:    calendar_events_list, calendar_events_insert
+
+──────────────────────────────────────────────────────────────────────────
+RUN 1 — nobody has approved a write. The calendar is not touched.
+──────────────────────────────────────────────────────────────────────────
+  gate: calendar_events_insert   requires_approval   calendar_events_insert creates something other people will see.
+  gate: calendar_events_insert   asked_human         no precedent covers these facts
+
+──────────────────────────────────────────────────────────────────────────
+THE ADMINISTRATOR ANSWERS ONCE, with a scope they choose
+──────────────────────────────────────────────────────────────────────────
+  precedent: pr-2026-08-27-internal-review
+  scope:     ["tool eq 'calendar_events_insert'"]
+  note:      the scope names one operation, not 'calendar'
+
+──────────────────────────────────────────────────────────────────────────
+RUN 2 — same request. Nobody is interrupted. A real event appears.
+──────────────────────────────────────────────────────────────────────────
+  gate: calendar_events_insert   requires_approval      calendar_events_insert creates something other people will see.
+  gate: calendar_events_insert   allowed_by_precedent   pr-2026-08-27-internal-review: Internal review slots on our
+                                                        own calendar are routine and reversible.
+  gemini: I have scheduled the event "Horizon Health grant — internal review" on
+          your primary calendar for September 11, 2026, from 15:00 to 16:00.
+```
+
+Verified independently against the Calendar API afterwards — the event existed,
+and was then deleted:
+
+```
+CREATED: 1
+dc3ve6fl8dsaj7nfi006gnphuk | Horizon Health grant — internal review
+deleted dc3ve6fl8dsaj7nfi006gnphuk -> HTTP 204
+```
+
+What makes this different from §1: the gate names the **operation**, not the
+dispatch. `calendar_events_insert` was approved; `calendar_events_list` was
+never in question; `calendar_acl_update` would still be refused outright, because
+it is a different tool. A dispatch-level gate cannot express that distinction.
+
+## 4. Four harnesses, one protocol
+
+Discovery against the machine, not a fixture. Four genuinely different
 integration shapes satisfying one 5-method protocol:
 
 ```
+  antigravity  0.1.15       ready        (Google SDK, local runtime, Vertex)
   claude_code  0.2.144      ready        (Python SDK)
   codex        0.149.1      ready        (CLI subprocess, JSONL stream)
   opencode     1.17.9       needs serve  (HTTP + SSE)
 ```
+
+Google Workspace is deliberately **not** in this list. ADK already ships
+official toolsets for it, so wrapping it in this protocol would have
+reimplemented them — and gated at dispatch instead of per operation. See §3.
 
 A harness that is not installed reports `available=False` with a reason and is
 left out of the fleet. Nothing raises:
@@ -118,7 +177,7 @@ opencode  unknown  unavailable (OpenCode server 'http://127.0.0.1:4096'
 
 ---
 
-## 4. Running it on a real repository
+## 5. Running it on a real repository
 
 ```bash
 GOOGLE_CLOUD_PROJECT=your-project python examples/dogfood.py --cwd . "your task"
@@ -134,14 +193,16 @@ make answers survive the process.
 
 Stated here rather than left to be discovered:
 
-- **Dispatch is gated; a harness's own inner tool calls are not.** They execute
-  in the harness's process and never return through ADK. They are streamed and
-  audited, not individually approved. See `src/adk_harness/agent.py`.
+- **Enforcement differs by path.** Workspace operations are gated individually
+  — `calendar_events_insert` is its own decision. Coding harnesses are gated at
+  dispatch only: their inner file edits and shell commands run in their own
+  process, never return through ADK, and are streamed and audited rather than
+  approved. See `src/adk_harness/agent.py` and `src/adk_harness/workspace.py`.
 - **The Cloud Run demo registers a stub harness**, because a container has
   neither `codex` nor `claude` installed. The stub says so in its own output.
   The transcript in §1 uses a stub for the same reason: it keeps the recording
   about governance rather than about which CLI is present.
-- **§3's opencode row is discovery, not a full run.** The adapter has tests and
+- **§4's opencode row is discovery, not a full run.** The adapter has tests and
   was written against the real binary and its SDK, but no end-to-end opencode
   session is captured here.
 - **`coactra` is a pre-existing dependency**, disclosed in

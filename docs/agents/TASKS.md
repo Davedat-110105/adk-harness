@@ -14,122 +14,21 @@ Every task shares these requirements:
 
 ---
 
-## Task 1 — the Codex adapter
+## Done, kept only as a record
 
-**Owner:** agent-codex-adapter
-**Files you write:** `src/adk_harness/adapters/codex.py`,
-`tests/test_adapter_codex.py`
+Tasks 1–4 — the Codex and Claude Code adapters, `HarnessAgent` and
+`build_fleet` — are landed and tested. Their full specifications were removed
+once the code existed; the code and its tests are the specification now.
 
-Codex has no Python SDK. The adapter drives the `codex` CLI as a subprocess and
-parses its streamed output.
+Task 5 (opencode) and Task 6 (a persistent precedent store) also landed.
 
-**Verify before you write.** Run `codex exec --help` and read it. The flags you
-need — non-interactive execution, structured/JSON output, sandbox mode, working
-directory, model selection, session resume — must come from that help text, not
-from memory. Also check `codex exec resume --help`. Record what you found in the
-module docstring, including the CLI version you verified against
-(`codex --version`).
+A seventh, the hand-rolled Google Calendar harness, was written and then
+**deleted**. ADK ships official Workspace toolsets, so wrapping Calendar in the
+`Harness` protocol reimplemented them and gated at dispatch instead of per
+operation. See `src/adk_harness/workspace.py`. It is recorded here because
+"we built this and removed it, for this reason" is worth more to the next agent
+than silence.
 
-Do **not** run a live `codex exec` that calls the API. Discovery via `--version`
-is fine; a real model call is not.
-
-**Shape:**
-
-```python
-class CodexHarness:
-    def __init__(self, *, binary: str = "codex", model: str | None = None,
-                 sandbox: str | None = None, extra_args: Sequence[str] = ()) -> None: ...
-```
-
-- `discover()` — run `<binary> --version` via `asyncio.create_subprocess_exec`.
-  If the binary is missing (`FileNotFoundError`) or exits non-zero, return
-  `HarnessSpec(id="codex", version="unknown", available=False, detail=...)`.
-  On success parse the version out and set `available=True` with the
-  capabilities the adapter genuinely supports.
-- `run()` — spawn the CLI with `cwd=cwd`, feed the prompt (stdin if the help
-  text says `-` reads stdin), and read stdout line by line as it arrives, using
-  `asyncio.subprocess.PIPE`. Never `await process.communicate()`; that buffers
-  the whole session and violates contract rule 5.
-  - If a structured output mode exists, parse each line as JSON and map events
-    onto `HarnessTurn.KINDS`. A line that is not valid JSON is not an error —
-    yield it as `kind="text"` or drop it, whichever the format implies.
-  - Non-zero exit yields a final `kind="error"` turn carrying stderr. Do not
-    raise out of the generator.
-  - `session_id`: if `codex exec resume` supports it, use it. If the mapping is
-    not clean, ignore the argument and say so in the docstring.
-- `aclose()` — terminate a running process if there is one, await it, and be
-  safe to call twice.
-
-**Tests** must not invoke the real binary. Patch
-`asyncio.create_subprocess_exec` with a fake that yields scripted stdout lines.
-Cover: binary missing → `available=False`; version parsed → `available=True`;
-each `HarnessTurn.kind` produced from a representative line; non-zero exit →
-`error` turn, no exception; `aclose()` mid-stream terminates and is idempotent.
-
----
-
-## Task 2 — the Claude Code adapter
-
-**Owner:** agent-claude-code-adapter
-**Files you write:** `src/adk_harness/adapters/claude_code.py`,
-`tests/test_adapter_claude_code.py`
-
-Claude Code has a real Python SDK, so this adapter uses it rather than a
-subprocess.
-
-**Verify before you write.** `claude-agent-sdk` is an optional extra and is
-**not currently installed in `.venv`**. Install it there first:
-
-```
-.venv/bin/pip install claude-agent-sdk
-```
-
-Then introspect the installed package — `dir()`, `inspect.getsource()`, read the
-files under `.venv/lib/python3.12/site-packages/claude_agent_sdk/` — to learn
-the real names of the query entry point, the options object, and the message and
-content-block classes. Do not write the adapter from recollection of the SDK's
-API; the exact class names and the streaming shape have changed between
-versions. Record the version you verified against in the module docstring.
-
-Note that the SDK generally needs the `claude` CLI binary present on the machine
-(it is at `/Users/datta/.local/bin/claude` here). `discover()` should account
-for both the Python package and the binary.
-
-**Shape:**
-
-```python
-class ClaudeCodeHarness:
-    def __init__(self, *, model: str | None = None,
-                 allowed_tools: Sequence[str] | None = None,
-                 permission_mode: str | None = None,
-                 system_prompt: str | None = None) -> None: ...
-```
-
-- `discover()` — import the SDK inside the method; on `ImportError` return
-  `available=False` with the pip hint in `detail`. Read the installed package
-  version (`importlib.metadata.version`). Also confirm the CLI binary resolves;
-  if it does not, that is `available=False` with a clear `detail`, not a crash.
-- `run()` — call the SDK's streaming query with `cwd=cwd`, and translate each
-  message and content block into `HarnessTurn`, putting the SDK object in `raw`.
-  Assistant text → `text`. Tool-use blocks → `tool_call` with `tool_name` and
-  `tool_args`. Tool results → `tool_result`. The final result message's token
-  and cost fields → `usage`. Errors → `error`.
-  - **Do not set a permissive permission mode by default.** This SDK's own
-    permission settings are not the governance layer; `CoactraGovernance` is.
-    Default to whatever the SDK's own default is, and let the caller override.
-  - `session_id`: use the SDK's resume/continue support if it has one. If not,
-    ignore it and document that.
-- `aclose()` — close or disconnect the client, idempotent.
-
-**Tests** must pass with the SDK absent as well as present. Inject a fake SDK
-module (`sys.modules` patch or a constructor seam) that emits scripted messages.
-Cover: SDK missing → `available=False` with a useful `detail`; SDK present →
-`available=True`; the full block-to-kind mapping including a tool-use block with
-arguments; an error message → `error` turn; `aclose()` idempotent.
-
----
-
-## Tasks 1–4 are done
 
 Both adapters, `HarnessAgent`, and `build_fleet` are landed, tested, and
 deployed. See [OWNERSHIP.md](OWNERSHIP.md).

@@ -188,11 +188,20 @@ Dispatch is gated: whether *this harness* may work in *this directory* on *this
 task* is a policy decision, and `governance.py` keys the policy resource on
 `cwd` for that reason.
 
-The tool calls a harness makes inside its own run are **observed, not gated** —
-they execute in the harness's own process and never return through ADK.
-`HarnessAgent` surfaces them as events so they land in the transcript, and says
-so in its docstring rather than letting the audit trail imply more coverage than
-it has.
+Two paths, two levels of enforcement. Stating this precisely matters, because
+the answer differs and overclaiming either way would be wrong.
+
+**Google Workspace, via ADK toolsets — every operation is gated.** Each API
+operation is its own ADK tool, so `calendar_events_insert` is a separate policy
+decision from `calendar_events_list`, and `calendar_acl_update` can be refused
+outright while both of those are allowed.
+
+**Coding harnesses, via the `Harness` protocol — dispatch is gated, inner calls
+are observed.** Claude Code, Codex, opencode and Antigravity run in their own
+processes; the file edits and shell commands they make never return through ADK.
+`HarnessAgent` surfaces them as events so they land in the transcript, but it
+does not pretend to have approved them. Per-call enforcement there requires the
+vendor's own permission hook.
 
 ## Install
 
