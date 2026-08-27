@@ -9,7 +9,7 @@ the check reads what the token actually carries, and says so when it is absent.
 from __future__ import annotations
 
 import json
-from typing import Any
+from typing import Any, ClassVar
 
 import pytest
 
@@ -25,7 +25,7 @@ class _Response:
 def _fake_auth(monkeypatch: pytest.MonkeyPatch, *, scopes: str, status: int = 200):
     class _Credentials:
         token = "fake-token"
-        granted_scopes: list[str] = []
+        granted_scopes: ClassVar[list[str]] = []
 
         def refresh(self, request: Any) -> None:
             return None

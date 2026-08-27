@@ -28,6 +28,8 @@ opencode = ["httpx>=0.27"]
 # Google Workspace harnesses. Kept optional: the base install must not need
 # them, and a machine without them reports available=False rather than failing.
 google-workspace = ["google-api-python-client>=2.100", "google-auth>=2.30"]
+# Firestore backs the append-only action ledger the PRD requires.
+ledger = ["google-cloud-firestore>=2.16"]
 # Bounded at the minor, because 0.1.x is an alpha ("Development Status :: 3")
 # that ships a compiled localharness binary per platform wheel — the Python
 # surface and the wire protocol move together, so a 0.2 is a runtime change and
