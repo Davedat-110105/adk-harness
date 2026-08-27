@@ -120,18 +120,29 @@ async def test_dry_run_does_not_insert(monkeypatch: pytest.MonkeyPatch) -> None:
     harness = CalendarHarness(dry_run=True)
     await harness.discover()
 
-    turns = [turn async for turn in harness.run("Lunch with Sam", cwd="/tmp")]
+    prompt = json.dumps(
+        {
+            "summary": "Lunch with Sam",
+            "start": {"dateTime": "2026-08-28T12:00:00-04:00"},
+            "end": {"dateTime": "2026-08-28T13:00:00-04:00"},
+        }
+    )
+    turns = [turn async for turn in harness.run(prompt, cwd="/tmp")]
 
     assert [turn.kind for turn in turns] == ["tool_call", "tool_result", "usage"]
     assert turns[0].tool_name == "calendar.events.insert"
-    assert turns[0].tool_args == {"summary": "Lunch with Sam"}
+    assert turns[0].tool_args["summary"] == "Lunch with Sam"
     assert turns[1].text == "dry run: nothing was created"
     assert events.insert_calls == []
 
 
 @pytest.mark.asyncio
 async def test_successful_insert_maps_tool_call_and_result(monkeypatch: pytest.MonkeyPatch) -> None:
-    body = {"summary": "Planning", "start": {"date": "2026-08-28"}}
+    body = {
+        "summary": "Planning",
+        "start": {"date": "2026-08-28"},
+        "end": {"date": "2026-08-29"},
+    }
     created = {"id": "event-123", "htmlLink": "https://calendar.google.com/event-123"}
     events = FakeEvents(insert_result=created)
     install_google_fakes(monkeypatch, lambda **_kwargs: (object(), "project"), FakeService(events))
@@ -155,8 +166,55 @@ async def test_http_error_becomes_error_turn(monkeypatch: pytest.MonkeyPatch) ->
     harness = CalendarHarness(dry_run=False)
     await harness.discover()
 
-    turns = [turn async for turn in harness.run("Retry appointment", cwd="/tmp")]
+    prompt = json.dumps(
+        {
+            "summary": "Retry appointment",
+            "start": {"dateTime": "2026-08-28T09:00:00-04:00"},
+            "end": {"dateTime": "2026-08-28T09:30:00-04:00"},
+        }
+    )
+    turns = [turn async for turn in harness.run(prompt, cwd="/tmp")]
 
     assert [turn.kind for turn in turns] == ["tool_call", "error", "usage"]
     assert "HTTP 500" in (turns[1].text or "")
     assert "Calendar unavailable" in (turns[1].text or "")
+
+
+@pytest.mark.asyncio
+async def test_a_body_wrapped_in_prose_is_still_found() -> None:
+    """What a model actually sends, as opposed to what a test author writes.
+
+    The adapter originally parsed only a prompt that was entirely JSON. That
+    passed every hand-written test and failed against a real fleet, because
+    Gemini wraps the same JSON in a sentence. The event body was dropped, an
+    incomplete request reached Google, and it answered "Missing end time" —
+    which reads like our bug.
+    """
+    harness = CalendarHarness()
+    prompt = (
+        "Please schedule the internal review using exactly this event body: "
+        '{"summary": "Review", "start": {"dateTime": "2026-09-11T15:00:00-04:00"}, '
+        '"end": {"dateTime": "2026-09-11T16:00:00-04:00"}} — thanks."'
+    )
+
+    turns = [turn async for turn in harness.run(prompt, cwd="/tmp")]
+
+    assert turns[0].tool_args["summary"] == "Review"
+    assert turns[0].tool_args["start"]["dateTime"] == "2026-09-11T15:00:00-04:00"
+    assert [t.kind for t in turns] == ["tool_call", "tool_result", "usage"]
+
+
+@pytest.mark.asyncio
+async def test_a_body_without_times_is_refused_locally() -> None:
+    """Refusing here beats letting Google refuse for us.
+
+    A round trip that returns "Missing end time" costs a request and explains
+    nothing about which field the caller omitted.
+    """
+    harness = CalendarHarness()
+
+    turns = [turn async for turn in harness.run("just some prose", cwd="/tmp")]
+
+    assert [t.kind for t in turns] == ["tool_call", "error", "usage"]
+    assert "start and end" in (turns[1].text or "")
+    assert turns[2].tool_args["api_calls"] == 0

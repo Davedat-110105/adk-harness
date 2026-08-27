@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Sequence
 from typing import Any
 
 from adk_harness.protocol import HarnessSpec, HarnessTurn
@@ -11,6 +12,45 @@ from adk_harness.protocol import HarnessSpec, HarnessTurn
 __all__ = ["CalendarHarness"]
 
 _CALENDAR_SCOPE = "https://www.googleapis.com/auth/calendar.events"
+
+
+def _event_body(prompt: str) -> dict[str, Any]:
+    """Recover an event body from whatever the caller actually sent.
+
+    A caller may pass clean JSON. An orchestrating model usually does not — it
+    wraps the same JSON in a sentence. Parsing only a whole-string JSON document
+    therefore worked in tests, where the prompt is written by hand, and failed
+    against a real fleet, where the prompt is written by Gemini.
+
+    So: try the whole string, then the first balanced object inside it, and only
+    then fall back to treating the text as a summary.
+    """
+    try:
+        parsed = json.loads(prompt)
+    except json.JSONDecodeError:
+        parsed = None
+    if isinstance(parsed, dict):
+        return parsed
+
+    start = prompt.find("{")
+    while start != -1:
+        depth = 0
+        for index in range(start, len(prompt)):
+            if prompt[index] == "{":
+                depth += 1
+            elif prompt[index] == "}":
+                depth -= 1
+                if depth == 0:
+                    try:
+                        candidate = json.loads(prompt[start : index + 1])
+                    except json.JSONDecodeError:
+                        break
+                    if isinstance(candidate, dict):
+                        return candidate
+                    break
+        start = prompt.find("{", start + 1)
+
+    return {"summary": prompt}
 
 
 def _http_status(error: Exception) -> int | None:
@@ -52,6 +92,10 @@ class CalendarHarness:
         self.calendar_id = calendar_id
         self.dry_run = dry_run
         self._service: Any = None
+        # Ids of events this harness actually created. A caller that made a
+        # visible change to someone's calendar should be able to find it again
+        # without scraping the turn stream — to show it, or to undo it.
+        self.created_event_ids: list[str] = []
         self.spec = HarnessSpec(id="google_calendar", version="v3", available=False)
 
     async def discover(self) -> HarnessSpec:
@@ -135,11 +179,7 @@ class CalendarHarness:
         return self._run(prompt)
 
     async def _run(self, prompt: str) -> AsyncIterator[HarnessTurn]:
-        try:
-            parsed = json.loads(prompt)
-        except json.JSONDecodeError:
-            parsed = None
-        event = parsed if isinstance(parsed, dict) else {"summary": prompt}
+        event = _event_body(prompt)
 
         yield HarnessTurn(
             kind="tool_call",
@@ -147,6 +187,30 @@ class CalendarHarness:
             tool_args=event,
             raw=event,
         )
+
+        # Refuse locally rather than letting Google refuse for us. An
+        # orchestrating model paraphrases; when it drops the times, the API
+        # answers "Missing end time", which reads like our bug and costs a
+        # round trip to learn nothing. Say what is missing instead.
+        missing = [field for field in ("start", "end") if field not in event]
+        if missing:
+            yield HarnessTurn(
+                kind="error",
+                tool_name="calendar.events.insert",
+                text=(
+                    f"Cannot create an event without {' and '.join(missing)}. "
+                    "Pass a JSON event body with RFC3339 start and end times; "
+                    "prose alone does not carry them."
+                ),
+                raw={"missing": missing, "event": event},
+            )
+            yield HarnessTurn(
+                kind="usage",
+                text="0 calendar API requests",
+                tool_args={"api_calls": 0},
+                raw={"api_calls": 0},
+            )
+            return
 
         if self.dry_run:
             yield HarnessTurn(
@@ -198,6 +262,8 @@ class CalendarHarness:
             "id": created.get("id") if isinstance(created, dict) else None,
             "htmlLink": created.get("htmlLink") if isinstance(created, dict) else None,
         }
+        if result["id"]:
+            self.created_event_ids.append(str(result["id"]))
         yield HarnessTurn(
             kind="tool_result",
             tool_name="calendar.events.insert",
@@ -210,6 +276,34 @@ class CalendarHarness:
             tool_args={"api_calls": 1},
             raw={"api_calls": 1},
         )
+
+    async def delete_events(self, event_ids: Sequence[str]) -> int:
+        """Remove events this harness created, returning how many were removed.
+
+        A demo that creates a real event on a real calendar should be able to
+        clean up after itself. Deletion is deliberately explicit rather than
+        automatic on close: an event nobody asked to remove is not litter, and
+        silently undoing a change a human approved would be its own kind of
+        governance failure.
+        """
+        if self._service is None:
+            await self.discover()
+        if self._service is None:
+            return 0
+        removed = 0
+        for event_id in event_ids:
+            try:
+                await asyncio.to_thread(
+                    self._service.events()
+                    .delete(calendarId=self.calendar_id, eventId=event_id)
+                    .execute
+                )
+            except Exception:  # cleanup must not mask the result it is cleaning up
+                continue
+            removed += 1
+            if event_id in self.created_event_ids:
+                self.created_event_ids.remove(event_id)
+        return removed
 
     async def aclose(self) -> None:
         self._service = None
