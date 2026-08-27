@@ -20,7 +20,18 @@ from google.adk.plugins.base_plugin import BasePlugin
 
 from adk_harness.precedent import MatchOutcome, Precedent, PrecedentStore
 
-__all__ = ["AuditRecord", "CoactraGovernance"]
+__all__ = ["ACTION_TOOL_CALL", "AuditRecord", "CoactraGovernance"]
+
+ACTION_TOOL_CALL = "tool.call"
+"""coactra 0.7's canonical action for invoking a tool.
+
+The vocabulary is documented at the top of `coactra/policy.py`: actions are
+`<component>.<verb>`, resources are `<type>:<identifier>`. This package used to
+emit `tool:<name>` as the *action*, which is coactra's *resource* form — so a
+policy written against the published contract silently failed to match ours.
+
+Dispatch facts a workspace rule needs, notably `cwd`, travel in `context`,
+which is where the contract puts library-owned facts."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -80,16 +91,18 @@ class CoactraGovernance(BasePlugin):
         tool_args: dict[str, Any],
         tool_context: Any,
     ) -> dict[str, Any] | None:
-        action = f"tool:{tool.name}"
-        resource = self._resource_for(tool, tool_args)
+        action = ACTION_TOOL_CALL
+        workspace = self._resource_for(tool, tool_args)
         decision = await self._policy.check(
             PolicyRequest(
                 principal=self._principal,
                 action=action,
-                resource=resource,
+                resource=f"tool:{tool.name}",
                 scope=self._scope,
-                component="adk-harness",
-                context={"tool_args": tool_args, "resource": resource},
+                component="agent",
+                # Library-owned facts written last, so caller data in tool_args
+                # cannot overwrite them — coactra's contract requires this.
+                context={"tool_args": dict(tool_args), "cwd": workspace},
             )
         )
         self._record(tool.name, action, decision.outcome.name, decision.reason)
@@ -134,7 +147,7 @@ class CoactraGovernance(BasePlugin):
         Precedent removes the repeated question. It never removes the policy
         gate itself, and it never converts a deny into an allow.
         """
-        action = f"tool:{tool.name}"
+        action = ACTION_TOOL_CALL
         ambiguity = _ambiguity_type(tool.name)
         facts = _facts(tool.name, tool_args)
 

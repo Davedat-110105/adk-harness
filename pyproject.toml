@@ -19,7 +19,7 @@ dependencies = [
     # line changing here. The floor is 0.6.0 because that is what has been
     # verified: offline suite, lint, types, and the live Vertex tests all pass
     # against it. Widen the ceiling the same way, not in anticipation.
-    "coactra>=0.6.0,<0.7",
+    "coactra>=0.7.0,<0.8",
 ]
 
 [project.optional-dependencies]

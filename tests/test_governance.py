@@ -63,8 +63,12 @@ async def test_a_dispatch_without_cwd_is_judged_on_the_registered_directory() ->
         tool_context=FakeToolContext(),
     )
 
-    assert policy.requests[0].resource == "/workspace"
-    assert policy.requests[0].action == "tool:run_demo"
+    # coactra 0.7's contract: the action is the canonical verb, the resource
+    # names the tool, and dispatch facts like cwd travel in context.
+    assert policy.requests[0].action == "tool.call"
+    assert policy.requests[0].resource == "tool:run_demo"
+    assert policy.requests[0].component == "agent"
+    assert policy.requests[0].context["cwd"] == "/workspace"
 
 
 @pytest.mark.asyncio
@@ -81,7 +85,7 @@ async def test_an_explicit_cwd_beats_the_registered_directory() -> None:
         tool_context=FakeToolContext(),
     )
 
-    assert policy.requests[0].resource == "/workspace/api"
+    assert policy.requests[0].context["cwd"] == "/workspace/api"
 
 
 @pytest.mark.asyncio
@@ -94,7 +98,7 @@ async def test_an_unregistered_tool_still_gets_a_decision() -> None:
         tool=FakeTool("mystery"), tool_args={}, tool_context=FakeToolContext()
     )
 
-    assert policy.requests[0].resource == "mystery"
+    assert policy.requests[0].context["cwd"] == "mystery"
 
 
 @pytest.mark.asyncio

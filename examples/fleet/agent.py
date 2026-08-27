@@ -62,7 +62,9 @@ class WorkspacePolicy:
         self._workspace = workspace
 
     async def check(self, request: PolicyRequest) -> Decision:
-        resource = request.resource
+        # coactra 0.7 puts the tool in `resource` and dispatch facts in
+        # `context`, so the working directory is read from there.
+        resource = str(request.context.get("cwd") or request.resource)
 
         if not resource.startswith(self._workspace):
             return Decision(

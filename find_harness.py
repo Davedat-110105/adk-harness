@@ -1,13 +1,21 @@
-from pathlib import Path
 import ast
+from pathlib import Path
 
 
-for path in Path(".").rglob("*.py"):
-    if ".venv" in path.parts:
-        continue
-    try:
-        tree = ast.parse(path.read_text())
-    except (SyntaxError, UnicodeDecodeError):
-        continue
-    if any(isinstance(node, ast.ClassDef) and node.name == "Harness" for node in ast.walk(tree)):
-        print(path)
+root = Path(__file__).resolve().parent
+for path in root.rglob("*.py"):
+    if any(
+        isinstance(node, (ast.ClassDef, ast.AsyncFunctionDef, ast.FunctionDef))
+        and isinstance(node, ast.ClassDef)
+        and node.name == "Harness"
+        and any(
+            (isinstance(base, ast.Name) and base.id == "Protocol")
+            or (isinstance(base, ast.Attribute) and base.attr == "Protocol")
+            for base in node.bases
+        )
+        for node in ast.walk(ast.parse(path.read_text()))
+    ):
+        Path("answer_path.txt").write_text(f"{path.relative_to(root)}\n")
+        break
+else:
+    raise SystemExit("Harness protocol class not found")

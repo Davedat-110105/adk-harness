@@ -61,10 +61,13 @@ class RepoPolicy:
         self._root = str(root.resolve())
 
     async def check(self, request: PolicyRequest) -> Decision:
-        if not request.resource.startswith(self._root):
+        # coactra 0.7 puts the tool in `resource` and dispatch facts in
+        # `context`, so the working directory is read from there.
+        cwd = str(request.context.get("cwd") or "")
+        if not cwd.startswith(self._root):
             return Decision(
                 outcome=DecisionOutcome.deny,
-                reason=f"{request.resource} is outside {self._root}.",
+                reason=f"{cwd or request.resource} is outside {self._root}.",
                 source="repo-policy",
             )
 
