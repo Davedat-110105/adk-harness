@@ -12,14 +12,12 @@ satisfy the same contract is evidence that the contract is real.
 """
 
 from adk_harness.adapters.antigravity import AntigravityHarness
-from adk_harness.adapters.calendar import CalendarHarness
 from adk_harness.adapters.claude_code import ClaudeCodeHarness
 from adk_harness.adapters.codex import CodexHarness
 from adk_harness.adapters.opencode import OpenCodeHarness
 
 __all__ = [
     "AntigravityHarness",
-    "CalendarHarness",
     "ClaudeCodeHarness",
     "CodexHarness",
     "OpenCodeHarness",

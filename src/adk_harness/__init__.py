@@ -12,6 +12,7 @@ from adk_harness.precedent import (
 from adk_harness.protocol import Harness, HarnessSpec, HarnessTurn
 from adk_harness.registry import HarnessRegistry
 from adk_harness.stores import SQLitePrecedentStore
+from adk_harness.workspace import WorkspaceFleet, build_workspace_fleet
 
 __all__ = [
     "Applicability",
@@ -27,6 +28,8 @@ __all__ = [
     "Precedent",
     "PrecedentStore",
     "SQLitePrecedentStore",
+    "WorkspaceFleet",
     "build_fleet",
     "build_fleet_sync",
+    "build_workspace_fleet",
 ]
