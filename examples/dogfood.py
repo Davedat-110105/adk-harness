@@ -39,7 +39,12 @@ from google.adk.sessions import InMemorySessionService
 from google.genai import types
 
 from adk_harness import HarnessRegistry, SQLitePrecedentStore, build_fleet
-from adk_harness.adapters import ClaudeCodeHarness, CodexHarness, OpenCodeHarness
+from adk_harness.adapters import (
+    AntigravityHarness,
+    ClaudeCodeHarness,
+    CodexHarness,
+    OpenCodeHarness,
+)
 
 # Matched against the instruction, not against a path. A fleet dispatch resolves
 # to one working directory, so a rule reading only the resource would answer
@@ -123,8 +128,20 @@ async def main() -> int:
     root = Path(args.cwd).resolve()
     store = SQLitePrecedentStore(args.precedents) if args.precedents else None
 
+    # Antigravity is given the Vertex project explicitly rather than left to
+    # find an env var, so it is configured the same way the rest of this
+    # project is: Vertex and ADC, never a Gemini API key.
     registry = HarnessRegistry(
-        [CodexHarness(), ClaudeCodeHarness(), OpenCodeHarness()]
+        [
+            CodexHarness(),
+            ClaudeCodeHarness(),
+            OpenCodeHarness(),
+            AntigravityHarness(
+                vertex=True,
+                project=os.environ.get("GOOGLE_CLOUD_PROJECT"),
+                location=os.environ.get("GOOGLE_CLOUD_LOCATION", "global"),
+            ),
+        ]
     )
     kwargs = {"model": args.model} if args.model else {}
     fleet = await build_fleet(
