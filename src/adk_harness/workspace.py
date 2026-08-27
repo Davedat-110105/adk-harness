@@ -34,6 +34,7 @@ read and write and nothing else; it cannot even list which calendars exist.
 
 from __future__ import annotations
 
+import json
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
@@ -52,7 +53,13 @@ from google.adk.tools.google_api_tool import (
 from adk_harness.governance import CoactraGovernance
 from adk_harness.precedent import PrecedentStore
 
-__all__ = ["SCOPES", "TOOLSETS", "WorkspaceFleet", "build_workspace_fleet"]
+__all__ = [
+    "SCOPES",
+    "TOOLSETS",
+    "WorkspaceFleet",
+    "build_workspace_fleet",
+    "usable_services",
+]
 
 DEFAULT_MODEL = "gemini-3.5-flash"
 
@@ -157,6 +164,67 @@ async def build_workspace_fleet(
         services=tuple(services),
         tool_names=tuple(names),
     )
+
+
+async def usable_services(services: Sequence[str] = tuple(SCOPES)) -> dict[str, str | None]:
+    """Which Workspace services the current credentials can actually reach.
+
+    A harness that is not installed reports `available=False` with a reason
+    rather than raising; a Workspace service the credentials cannot reach
+    deserves the same. Without this the failure arrives later as an HTTP 403
+    from Google mid-run, which reads like a bug in this library.
+
+    This asks Google what the token actually carries rather than asking the
+    credentials object what it believes. A first version did the latter:
+    `granted_scopes` is empty for user ADC, so every service came back usable
+    while Gmail was in fact returning 403. A check that reports success when
+    the thing does not work is worse than no check, because it is believed.
+
+    Returns a mapping of service to `None` when usable, or a sentence saying
+    what to do about it.
+    """
+    import google.auth
+    import google.auth.transport.requests
+
+    try:
+        credentials, _ = google.auth.default(scopes=list(SCOPES.values()))
+        request = google.auth.transport.requests.Request()
+        credentials.refresh(request)
+    except Exception as exc:
+        detail = f"no usable Application Default Credentials: {exc}"
+        return dict.fromkeys(services, detail)
+
+    token = getattr(credentials, "token", None)
+    if not token:
+        return dict.fromkeys(services, "credentials produced no access token")
+
+    response = request(
+        url=f"https://oauth2.googleapis.com/tokeninfo?access_token={token}",
+        method="GET",
+    )
+    if response.status != 200:
+        # A service account's token is not introspectable this way. It holds
+        # whatever its identity was granted, and there is nothing to check.
+        return dict.fromkeys(services)
+
+    payload = json.loads(response.data)
+    granted = set(str(payload.get("scope", "")).split())
+
+    result: dict[str, str | None] = {}
+    for service in services:
+        needed = SCOPES.get(service)
+        if needed is None:
+            result[service] = f"unknown service {service!r}"
+        elif needed in granted:
+            result[service] = None
+        else:
+            result[service] = (
+                f"the token does not carry {needed}. Re-run `gcloud auth "
+                "application-default login --client-id-file=... --scopes=..."
+                f",{needed}` and check the consent screen actually lists it — "
+                "Google drops scopes it will not grant rather than failing."
+            )
+    return result
 
 
 def _instruction(services: Sequence[str]) -> str:
