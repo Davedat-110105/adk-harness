@@ -6,3 +6,13 @@ dist/
 
 # Agent audit output — working notes, not part of the library
 docs/audits/
+
+# Scratch files written by coding harnesses during dogfood runs. The harnesses
+# execute in their own processes, so the governance gate sees their dispatch
+# but not their individual writes — five of these were committed before anyone
+# noticed. Ignoring them is not a substitute for reviewing `git status`.
+/answer*.txt
+/*_check.py
+/*_check.txt
+/find_*.py
+/scratch_*
