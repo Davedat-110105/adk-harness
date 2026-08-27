@@ -31,18 +31,25 @@ Verify with `git log` — the first commit is dated 2026-08-24.
 
 `coactra` is an existing open-source Python library by the same author,
 published on PyPI and developed from 2026-06-01 onward. It predates the
-submission window: 158 of its 160 commits are earlier than 2026-08-03, and
+submission window: of its 165 commits, 158 are earlier than 2026-08-03, and
 versions 0.2.2 through 0.5.0 were released before the hackathon began.
 
 **It is used here as a third-party dependency, installed from PyPI like any
-other package.** This project depends on `coactra>=0.5.0` for its policy
+other package.** This project depends on `coactra>=0.7.0,<0.8` for its policy
 primitives — `Policy`, `PolicyRequest`, `Scope`, `Decision`, and
 `DecisionOutcome`. No part of `coactra` is claimed as hackathon work.
 
-Two commits were made to `coactra` during the window (exporting an existing
-workspace memory contract and adding Vertex AI documentation). Neither is
-claimed as part of this submission, and neither is required by it — the
-submission runs against the published 0.5.0 wheel.
+Seven commits were made to `coactra` during the window, and versions 0.6.0 and
+0.7.0 were released from them. None of that work is claimed as part of this
+submission. It is disclosed here rather than omitted because the submission
+does now depend on one of those releases: it installs the published 0.7.0
+wheel, not the 0.5.0 one it originally targeted.
+
+What changed in those releases was coactra's own housekeeping — a package
+rename, a trimmed public surface, and a documented policy-request vocabulary.
+The five primitives this project imports are unchanged in shape across 0.5.0,
+0.6.0 and 0.7.0. The dependency became newer; it did not become a place where
+submission work was hidden.
 
 - Repository: https://github.com/DataOpsFusion/coactra
 - Package: https://pypi.org/project/coactra/

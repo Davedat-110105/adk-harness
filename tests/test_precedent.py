@@ -22,7 +22,7 @@ SCOPE = Scope(tenant_id="acme", namespace="fleet")
 def _precedent(pid: str = "prec_01", **over: Any) -> Precedent:
     base: dict[str, Any] = {
         "precedent_id": pid,
-        "action": "tool:apply_patch",
+        "action": "tool.call",
         "ambiguity_type": "approval_required:apply_patch",
         "applicability": (
             Applicability("publicly_exposed", "eq", True),
@@ -57,7 +57,7 @@ class StubContext:
 
 def test_no_precedent_means_ask() -> None:
     result = PrecedentStore().match(
-        action="tool:apply_patch",
+        action="tool.call",
         ambiguity_type="approval_required:apply_patch",
         facts=FACTS,
     )
@@ -67,7 +67,7 @@ def test_no_precedent_means_ask() -> None:
 def test_matching_precedent_applies() -> None:
     store = PrecedentStore([_precedent()])
     result = store.match(
-        action="tool:apply_patch",
+        action="tool.call",
         ambiguity_type="approval_required:apply_patch",
         facts=FACTS,
     )
@@ -80,7 +80,7 @@ def test_a_missing_fact_is_never_a_pass() -> None:
     """The safety property. Absent evidence must not be read as agreement."""
     store = PrecedentStore([_precedent()])
     result = store.match(
-        action="tool:apply_patch",
+        action="tool.call",
         ambiguity_type="approval_required:apply_patch",
         facts={"publicly_exposed": True},  # `stateful` unknown
     )
@@ -90,7 +90,7 @@ def test_a_missing_fact_is_never_a_pass() -> None:
 def test_different_facts_do_not_match() -> None:
     store = PrecedentStore([_precedent()])
     result = store.match(
-        action="tool:apply_patch",
+        action="tool.call",
         ambiguity_type="approval_required:apply_patch",
         facts={"publicly_exposed": False, "stateful": True},
     )
@@ -100,7 +100,7 @@ def test_different_facts_do_not_match() -> None:
 def test_a_different_question_does_not_match() -> None:
     store = PrecedentStore([_precedent()])
     result = store.match(
-        action="tool:delete_volume",
+        action="tool.call",
         ambiguity_type="approval_required:delete_volume",
         facts=FACTS,
     )
@@ -115,7 +115,7 @@ def test_disagreeing_precedents_conflict_rather_than_guess() -> None:
         ]
     )
     result = store.match(
-        action="tool:apply_patch",
+        action="tool.call",
         ambiguity_type="approval_required:apply_patch",
         facts=FACTS,
     )
@@ -128,7 +128,7 @@ def test_expired_precedent_asks_for_revalidation() -> None:
         [_precedent(review_after=datetime.now(UTC) - timedelta(days=1))]
     )
     result = store.match(
-        action="tool:apply_patch",
+        action="tool.call",
         ambiguity_type="approval_required:apply_patch",
         facts=FACTS,
     )
@@ -147,7 +147,7 @@ def test_superseding_retires_the_old_precedent() -> None:
     )
     assert {p.precedent_id for p in store.active()} == {"prec_02"}
     result = store.match(
-        action="tool:apply_patch",
+        action="tool.call",
         ambiguity_type="approval_required:apply_patch",
         facts=FACTS,
     )

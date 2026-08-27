@@ -91,7 +91,7 @@ is the safest literal match.
 
 ### Coactra version pin
 
-Depend on `coactra>=0.5.0` from PyPI. The published 0.5.0 wheel carries
+Depend on `coactra>=0.7.0,<0.8` from PyPI. The published 0.7.0 wheel carries
 everything used here — `Policy`, `PolicyRequest`, `Scope`, `Decision`,
 `DecisionOutcome` — and the reference implementation was proven against it.
 
