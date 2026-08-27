@@ -37,8 +37,11 @@ COPY pyproject.toml README.md ./
 COPY src/ ./src/
 RUN pip install --no-cache-dir ".[tracing]"
 
-# ADK expects an agents directory holding one folder per agent.
+# ADK expects an agents directory holding one folder per agent. Both are
+# served by one container: /fleet governs coding harnesses, /workspace
+# governs Google Calendar. Same gate, same audit trail.
 COPY --chown=appuser:appuser examples/fleet/ /app/agents/fleet/
+COPY --chown=appuser:appuser examples/workspace/ /app/agents/workspace/
 
 USER appuser
 
