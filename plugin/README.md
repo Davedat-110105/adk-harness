@@ -1,57 +1,56 @@
 # adk-harness — an Antigravity plugin
 
-Delegate coding work to Codex, Claude Code or opencode from inside Antigravity,
-with one policy gate in front of every dispatch and a decision memory so you are
-asked once rather than every time.
+Govern Google Workspace from inside Antigravity. Calendar and Gmail operations
+become tools, each judged individually before it runs.
 
 ## Install
 
 ```bash
-pip install adk-harness
+pip install "adk-harness[google-workspace]"
+gcloud auth application-default login --client-id-file=client_secret.json \
+    --scopes=openid,https://www.googleapis.com/auth/cloud-platform,\
+https://www.googleapis.com/auth/calendar.events,\
+https://www.googleapis.com/auth/gmail.compose
+
 mkdir -p ~/.gemini/config/plugins
 cp -r plugin ~/.gemini/config/plugins/adk-harness
 ```
 
-Restart Antigravity. Whichever harnesses are installed on your machine appear as
-tools; the ones that are not are simply absent, with no error.
-
-For one project rather than globally, copy it to `.agents/plugins/adk-harness`
-in the workspace instead.
-
-## What it adds
-
-| Tool | What it does |
-|---|---|
-| `run_codex`, `run_claude_code`, `run_opencode` | delegate a task, under policy |
-| `governance_audit` | every decision this session, with reasons |
-| `remember_decision` | approve once; stop being asked |
-
-Antigravity is deliberately not offered as a tool — you are already talking to
-it.
+Restart Antigravity. A service whose scope your credentials do not carry is
+skipped with an explanation rather than exposed as a tool that always fails.
 
 ## What the gate decides
 
-Reading and ordinary edits inside the workspace proceed. Anything hard to undo —
-deleting, force-pushing, publishing, deploying — asks a person first. Anything
-touching credentials is refused outright.
+| Operation | Decision |
+|---|---|
+| `calendar_events_list`, `gmail_users_drafts_get` | **allow** — reads only |
+| `calendar_events_insert`, `gmail_users_drafts_create` | **ask** — others will see it |
+| `gmail_users_messages_send` | **deny** — cannot be undone; a person sends |
+| `calendar_acl_update` | **deny** — access is granted by people |
+| anything unrecognised | **ask** — the policy fails closed |
 
-That policy lives in `adk_harness.mcp_server.EditorPolicy` and is meant to be
-replaced with your own. `Policy` in coactra is a protocol with one async method,
-so a real policy is a small class, not a framework.
+Approve once and `remember_decision` records it, scoped to that one operation.
+
+## Calling the tools
+
+Parameters are **snake_case** — `calendar_id`, `max_results` — not the camelCase
+in Google's REST docs. ADK converts them; camelCase raises `KeyError`.
 
 ## Configuration
 
 | Variable | Meaning |
 |---|---|
-| `ADK_HARNESS_WORKSPACE` | root the agents may work in; outside it is denied |
-| `ADK_PRECEDENTS` | SQLite file for decisions, so approvals survive restarts |
+| `GOOGLE_CLOUD_PROJECT` | your Google Cloud project |
+| `ADK_SERVICES` | `calendar,gmail` by default; `docs` and `sheets` also supported |
+| `ADK_TOOLS` | which operations to expose; the default is seven of the ~117 available |
+| `ADK_PRECEDENTS` | SQLite file, so approvals survive a restart |
+| `ADK_HARNESSES=1` | also expose Codex / Claude Code / opencode, if installed |
 
 ## Honest limits
 
-- **Approvals are text, not a modal.** MCP has no confirmation channel, so a held
+- **Approvals are text, not a modal.** MCP has no confirmation channel: a held
   action returns "nothing has run" and you approve by saying so.
-- **The gate covers dispatch, not what an agent then does inside its own
-  process.** Those tool calls never return through MCP. They are visible in the
-  transcript, not individually approved.
-- **Precedents are per-machine.** The store is SQLite. Two people running this
-  each answer their own questions; sharing them needs a shared backend.
+- **Precedents are per-machine.** SQLite. Two people each answer their own
+  questions until the store is shared.
+- **Gmail sending is refused by policy, not merely absent.** Drafting is
+  reversible; sending is not.

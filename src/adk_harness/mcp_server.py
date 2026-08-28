@@ -25,6 +25,7 @@ it; handing it back to itself would be a loop with a bill attached.
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 from pathlib import Path
 from typing import Any
@@ -46,23 +47,83 @@ NEVER = ("secret", "secrets", "credential", "credentials", "password", "password
 NEVER_PHRASES = ("api key", "access token", "auth token", ".env")
 ASK_FIRST = ("delete", "remove", "force", "push", "publish", "deploy", "rm")
 
+# Named, not inherited. CalendarToolset alone offers 38 operations including
+# ACL changes; a plugin should hold only what somebody decided to give it.
+DEFAULT_TOOLS = (
+    "calendar_events_list,calendar_events_get,calendar_events_insert,"
+    "calendar_events_update,gmail_users_drafts_list,gmail_users_drafts_get,"
+    "gmail_users_drafts_create"
+)
+
 
 def _words(text: str) -> set[str]:
     return set("".join(c if c.isalnum() else " " for c in text.lower()).split())
 
 
-class EditorPolicy:
-    """Read and edit inside the workspace. Destructive work asks first.
+WRITE_VERBS = (
+    "insert", "create", "update", "delete", "patch", "move",
+    "import", "trash", "modify", "batch", "send",
+)
+READ_VERBS = ("list", "get", "search", "watch")
 
-    Whole words, not substrings: an earlier version matched "token" anywhere and
-    refused ordinary prose that happened to use the word. A gate that fires on
-    text it does not understand trains people to click past it.
+
+class EditorPolicy:
+    """Reads flow. Anything other people will see asks a person. Sharing is refused.
+
+    Two rules learned the hard way. Whole words, not substrings: an earlier
+    version matched "token" anywhere and refused ordinary prose. And it fails
+    closed — an operation matching no known verb asks rather than proceeds,
+    because a first version omitted "create" from the write list and a Gmail
+    draft was written to a real mailbox judged as "only reads".
     """
 
     def __init__(self, root: Path) -> None:
         self._root = str(root)
 
     async def check(self, request: PolicyRequest) -> Decision:
+        tool = request.resource.removeprefix("tool:")
+
+        # Google Workspace operations are judged on the operation itself.
+        if tool.startswith(("calendar_", "gmail_", "docs_", "sheets_")):
+            if "acl" in tool or "settings" in tool or "permission" in tool:
+                return Decision(
+                    outcome=DecisionOutcome.deny,
+                    reason=(
+                        f"{tool} changes who can access this data. Access is "
+                        "granted by a person, never by an agent."
+                    ),
+                    source="editor-policy",
+                )
+            if "send" in tool:
+                return Decision(
+                    outcome=DecisionOutcome.deny,
+                    reason=(
+                        f"{tool} delivers mail to real people and cannot be "
+                        "undone. This fleet drafts; a person sends."
+                    ),
+                    source="editor-policy",
+                )
+            if any(v in tool for v in WRITE_VERBS):
+                return Decision(
+                    outcome=DecisionOutcome.requires_approval,
+                    reason=f"{tool} creates or changes something others will see.",
+                    source="editor-policy",
+                )
+            if any(v in tool for v in READ_VERBS):
+                return Decision(
+                    outcome=DecisionOutcome.allow,
+                    reason=f"{tool} only reads.",
+                    source="editor-policy",
+                )
+            return Decision(
+                outcome=DecisionOutcome.requires_approval,
+                reason=f"{tool} is not a known read operation. A person should look.",
+                source="editor-policy",
+            )
+
+        return await self._check_harness(request)
+
+    async def _check_harness(self, request: PolicyRequest) -> Decision:
         args = request.context.get("tool_args") or {}
         text = " ".join(str(v) for v in args.values() if isinstance(v, str)).lower()
         words = _words(text)
@@ -114,11 +175,12 @@ class _Context:
         self.asked.append(hint)
 
 
-def build_server(registry: HarnessRegistry, gate: CoactraGovernance) -> Any:
-    """One MCP tool per available harness, each behind the gate."""
+async def build_server(registry: HarnessRegistry, gate: CoactraGovernance) -> Any:
+    """Google Workspace operations, plus any coding harnesses, all behind the gate."""
     from mcp.server.fastmcp import FastMCP
 
     server = FastMCP("adk-harness")
+    await _register_workspace(server, gate)
 
     def _register(harness_id: str) -> None:
         async def run(instruction: str, cwd: str = str(WORKSPACE)) -> str:
@@ -207,14 +269,100 @@ def build_server(registry: HarnessRegistry, gate: CoactraGovernance) -> Any:
     return server
 
 
-async def _registry() -> HarnessRegistry:
-    """Every harness present on this machine, discovered concurrently.
+async def _register_workspace(server: Any, gate: CoactraGovernance) -> list[str]:
+    """Expose Google Workspace operations as governed MCP tools.
 
-    The point of this server is choosing between models from inside one editor,
-    so it offers all of them rather than a favourite. One that is not installed
-    reports `available=False` and is simply not exposed as a tool — no error, no
-    entry the model can call and fail.
+    Each operation is its own tool, so the gate judges `calendar_events_insert`
+    separately from `calendar_events_list` — which is what the PRD means by
+    "the gateway evaluates every tool call; approval at initial dispatch is
+    insufficient."
+
+    A service whose scope the credentials do not carry is skipped with a note
+    rather than exposed as a tool that would fail. An editor showing a tool that
+    always errors is worse than one that shows fewer tools.
     """
+    from google.adk.auth.auth_credential import ServiceAccount
+
+    from adk_harness.workspace import SCOPES, TOOLSETS, usable_services
+
+    wanted = [
+        s.strip()
+        for s in os.environ.get("ADK_SERVICES", "calendar,gmail").split(",")
+        if s.strip()
+    ]
+    reachable = await usable_services(tuple(wanted))
+    services = [name for name in wanted if reachable.get(name) is None]
+    skipped = {n: why for n, why in reachable.items() if why is not None}
+
+    exposed: list[str] = []
+    if not services:
+        return exposed
+
+    credential = ServiceAccount(
+        use_default_credential=True, scopes=[SCOPES[n] for n in services]
+    )
+    allow = [t.strip() for t in os.environ.get("ADK_TOOLS", DEFAULT_TOOLS).split(",")]
+
+    for name in services:
+        toolset = TOOLSETS[name](
+            service_account=credential, tool_filter=[t for t in allow if t]
+        )
+        for tool in await toolset.get_tools():
+            _register_workspace_tool(server, gate, tool)
+            exposed.append(tool.name)
+
+    if skipped:
+        @server.tool()
+        async def workspace_unavailable() -> str:
+            """Why a Google service is not offered here, and how to fix it."""
+            return "\n\n".join(f"{n}: {why}" for n, why in skipped.items())
+
+    return exposed
+
+
+def _register_workspace_tool(server: Any, gate: CoactraGovernance, tool: Any) -> None:
+    async def call(arguments: dict[str, Any] | None = None) -> str:
+        args = arguments or {}
+        blocked = await gate.before_tool_callback(
+            tool=_Tool(tool.name), tool_args=args, tool_context=_Context()
+        )
+        if blocked is not None:
+            if blocked.get("status") == "awaiting_confirmation":
+                return (
+                    f"HELD FOR APPROVAL — nothing has run.\n\n{blocked.get('reason')}\n\n"
+                    "If the person approves, record it with remember_decision so "
+                    "this exact question is not asked again."
+                )
+            return f"BLOCKED by policy — nothing has run.\n\n{blocked.get('reason')}"
+
+        try:
+            result = await tool.run_async(args=args, tool_context=None)
+        except Exception as exc:  # the API refused; say so rather than crashing
+            return f"[error] {type(exc).__name__}: {exc}"
+        return json.dumps(result, default=str)[:4000]
+
+    call.__name__ = tool.name
+    call.__doc__ = (
+        f"{getattr(tool, 'description', tool.name)}\n\n"
+        "Pass parameters in `arguments` using snake_case — `calendar_id`, "
+        "`max_results`, `time_min` — not the camelCase of Google's REST docs. "
+        "ADK converts them; sending camelCase raises KeyError on the field "
+        "name.\n\n"
+        "Every call passes the policy gate first."
+    )
+    server.tool()(call)
+
+
+async def _registry() -> HarnessRegistry:
+    """Coding harnesses, when this server is asked to expose them.
+
+    Off by default. The Google surface is the point; coding agents are a second
+    concern and adding them silently would double the tool list for people who
+    only wanted Workspace. Set ADK_HARNESSES=1 to include whichever are present.
+    """
+    if os.environ.get("ADK_HARNESSES") != "1":
+        return HarnessRegistry([])
+
     from adk_harness.adapters import (
         ClaudeCodeHarness,
         CodexHarness,
@@ -237,7 +385,8 @@ def main() -> None:
         precedents=SQLitePrecedentStore(PRECEDENTS),
         resources={f"run_{s.id}": str(WORKSPACE) for s in registry.specs()},
     )
-    build_server(registry, gate).run()
+    server = asyncio.run(build_server(registry, gate))
+    server.run()
 
 
 if __name__ == "__main__":
