@@ -47,10 +47,15 @@ NO = "  needs "
 
 def _run(*args: str) -> tuple[int, str]:
     try:
-        done = subprocess.run(args, capture_output=True, text=True, timeout=60)
+        done = subprocess.run(
+            args, capture_output=True, text=True, timeout=60, check=False
+        )
     except (OSError, subprocess.TimeoutExpired) as exc:
         return 1, str(exc)
-    return done.returncode, (done.stdout or done.returncode and done.stderr or "").strip()
+    # stdout when it worked, stderr when it did not — the previous one-liner
+    # chained `and` inside `or` and had to be read twice to be believed.
+    output = done.stdout if done.returncode == 0 else done.stderr
+    return done.returncode, (output or "").strip()
 
 
 def _plugin_source() -> Path | None:

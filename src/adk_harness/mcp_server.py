@@ -25,6 +25,7 @@ it; handing it back to itself would be a loop with a bill attached.
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -179,8 +180,19 @@ async def build_server(registry: HarnessRegistry, gate: CoactraGovernance) -> An
     """Google Workspace operations, plus any coding harnesses, all behind the gate."""
     from mcp.server.fastmcp import FastMCP
 
+    from adk_harness.armor import ContentArmor
+
     server = FastMCP("adk-harness")
-    await _register_workspace(server, gate)
+    armor = ContentArmor(
+        allowed_email_domains=(
+            domain
+            for domain in os.environ.get("ADK_ALLOWED_DOMAINS", "gmail.com").split(",")
+            if domain
+        )
+    )
+    ledger = _ledger()
+    ledger_scope = _ledger_scope(gate)
+    await _register_workspace(server, gate, armor, ledger, ledger_scope)
 
     def _register(harness_id: str) -> None:
         async def run(instruction: str, cwd: str = str(WORKSPACE)) -> str:
@@ -236,6 +248,26 @@ async def build_server(registry: HarnessRegistry, gate: CoactraGovernance) -> An
         )
 
     @server.tool()
+    async def armor_findings() -> str:
+        """Show suspicious content or arguments found during this server session."""
+        if not armor.findings:
+            return "No armor findings this session."
+        return json.dumps(armor.findings, ensure_ascii=False)
+
+    @server.tool()
+    async def ledger_recent(limit: int = 20) -> str:
+        """Show recent executions so a person can verify what the agent did."""
+        if ledger is None:
+            return "Action ledger is off. Set ADK_LEDGER=1 to enable it."
+        try:
+            entries = ledger.query(scope=ledger_scope, limit=limit)
+        except Exception as exc:  # observability must not break the MCP server
+            return f"Action ledger unavailable: {type(exc).__name__}: {exc}"
+        if not entries:
+            return "No ledger entries yet."
+        return json.dumps(entries, default=str, ensure_ascii=False)[:4000]
+
+    @server.tool()
     async def remember_decision(
         harness: str, precedent_id: str, rationale: str, confirmed_by: str = "user"
     ) -> str:
@@ -269,7 +301,13 @@ async def build_server(registry: HarnessRegistry, gate: CoactraGovernance) -> An
     return server
 
 
-async def _register_workspace(server: Any, gate: CoactraGovernance) -> list[str]:
+async def _register_workspace(
+    server: Any,
+    gate: CoactraGovernance,
+    armor: Any | None = None,
+    ledger: Any | None = None,
+    ledger_scope: str = "workspace:local",
+) -> list[str]:
     """Expose Google Workspace operations as governed MCP tools.
 
     Each operation is its own tool, so the gate judges `calendar_events_insert`
@@ -308,7 +346,14 @@ async def _register_workspace(server: Any, gate: CoactraGovernance) -> list[str]
             service_account=credential, tool_filter=[t for t in allow if t]
         )
         for tool in await toolset.get_tools():
-            _register_workspace_tool(server, gate, tool)
+            _register_workspace_tool(
+                server,
+                gate,
+                tool,
+                armor=armor,
+                ledger=ledger,
+                ledger_scope=ledger_scope,
+            )
             exposed.append(tool.name)
 
     if skipped:
@@ -320,11 +365,26 @@ async def _register_workspace(server: Any, gate: CoactraGovernance) -> list[str]
     return exposed
 
 
-def _register_workspace_tool(server: Any, gate: CoactraGovernance, tool: Any) -> None:
+def _register_workspace_tool(
+    server: Any,
+    gate: CoactraGovernance,
+    tool: Any,
+    *,
+    armor: Any | None = None,
+    ledger: Any | None = None,
+    ledger_scope: str = "workspace:local",
+) -> None:
     async def call(arguments: dict[str, Any] | None = None) -> str:
         args = arguments or {}
+        context = _Context()
+        if armor is not None:
+            armored = await armor.before_tool_callback(
+                tool=_Tool(tool.name), tool_args=args, tool_context=context
+            )
+            if armored is not None:
+                return f"BLOCKED by content armor — nothing has run.\n\n{armored.get('reason')}"
         blocked = await gate.before_tool_callback(
-            tool=_Tool(tool.name), tool_args=args, tool_context=_Context()
+            tool=_Tool(tool.name), tool_args=args, tool_context=context
         )
         if blocked is not None:
             if blocked.get("status") == "awaiting_confirmation":
@@ -337,9 +397,43 @@ def _register_workspace_tool(server: Any, gate: CoactraGovernance, tool: Any) ->
 
         try:
             result = await tool.run_async(args=args, tool_context=None)
+            outcome = "completed"
         except Exception as exc:  # the API refused; say so rather than crashing
-            return f"[error] {type(exc).__name__}: {exc}"
-        return json.dumps(result, default=str)[:4000]
+            result = f"[error] {type(exc).__name__}: {exc}"
+            outcome = f"error: {type(exc).__name__}"
+
+        if armor is not None:
+            result = await armor.after_tool_callback(
+                tool=_Tool(tool.name),
+                tool_args=args,
+                tool_context=context,
+                result=result,
+            )
+            if isinstance(result, dict) and result.get("status") == "quarantined":
+                outcome = "quarantined"
+
+        response = json.dumps(result, default=str)[:4000]
+        if ledger is not None:
+            policy = next(
+                (record for record in reversed(gate.audit) if record.tool_name == tool.name),
+                None,
+            )
+            try:
+                ledger.record(
+                    actor=getattr(gate, "_principal", "user:local"),
+                    agent="adk-harness-mcp",
+                    action="tool.call",
+                    resource=f"tool:{tool.name}",
+                    scope=ledger_scope,
+                    policy_outcome=getattr(policy, "outcome", "allow"),
+                    policy_reason=getattr(policy, "reason", None),
+                    tool_args=args,
+                    outcome=outcome,
+                    idempotency_key=_idempotency_key(tool.name, args),
+                )
+            except Exception as exc:  # observability must not break the action
+                response += f"\n\n[ledger error] {type(exc).__name__}: {exc}"
+        return response
 
     call.__name__ = tool.name
     call.__doc__ = (
@@ -351,6 +445,30 @@ def _register_workspace_tool(server: Any, gate: CoactraGovernance, tool: Any) ->
         "Every call passes the policy gate first."
     )
     server.tool()(call)
+
+
+def _ledger() -> Any | None:
+    """Keep Firestore opt-in so local MCP use has no database side effects."""
+    if os.environ.get("ADK_LEDGER") != "1":
+        return None
+    from adk_harness.ledger import FirestoreActionLedger
+
+    return FirestoreActionLedger(collection="action_ledger")
+
+
+def _ledger_scope(gate: CoactraGovernance) -> str:
+    scope = getattr(gate, "_scope", None)
+    return (
+        f"{getattr(scope, 'tenant_id', 'local')}:{getattr(scope, 'namespace', 'editor')}"
+    )
+
+
+def _idempotency_key(tool_name: str, arguments: dict[str, Any]) -> str:
+    canonical = json.dumps(
+        arguments, ensure_ascii=False, separators=(",", ":"), sort_keys=True
+    )
+    digest = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+    return f"{tool_name}:{digest}"
 
 
 async def _registry() -> HarnessRegistry:
