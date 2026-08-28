@@ -24,7 +24,7 @@ Verified working, on real infrastructure, as of this writing:
 | Deployed on Cloud Run, all three outcomes | revision `adk-harness-fleet-00005-tjr`, see below |
 | A real Google Calendar event, gated per operation | `docs/PROOF.md` §3 — event created, verified, deleted |
 | Antigravity harness on Vertex | `available=True` from explicit args, no env vars |
-| Offline suite | 105 passed, 4 skipped |
+| Offline suite | 126 passed, 4 skipped (`.venv/bin/pytest -q`, measured 2026-08-27) |
 
 The three governance outcomes, verified live against the deployed service with
 Gemini 3.5 Flash on Vertex:
@@ -114,15 +114,14 @@ Note the IAM shape, learned the hard way during provisioning: Memory Bank needs
 `contextSpec.memoryBankConfig` on the engine. Either alone returns 403 on the
 embedding call.
 
-### A third adapter, to prove the protocol is not shaped around two vendors
+### A third adapter — done, and a fourth landed alongside it
 
-`opencode` is the right candidate: it is an HTTP server with an OpenAPI spec,
-which is a genuinely third integration shape after "CLI subprocess" and "Python
-SDK". Two adapters can accidentally agree; three that disagree structurally and
-still fit the same protocol is evidence.
-
-`httpx` is already declared as the `opencode` extra. The work is the adapter
-itself.
+`opencode` (HTTP + OpenAPI, `src/adk_harness/adapters/opencode.py`) and
+`antigravity` (Python SDK over a bundled compiled runtime,
+`src/adk_harness/adapters/antigravity.py`) are both landed and tested. Four
+integration shapes now satisfy one protocol — stronger evidence than the three
+this section originally asked for. See the status table in
+[README.md](../README.md).
 
 **Not planned:** Hermes Agent and DeepSeek Harness. They are general agent
 runtimes rather than coding-first agents, and DeepSeek Harness is a v0.1

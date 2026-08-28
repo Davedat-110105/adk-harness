@@ -48,7 +48,7 @@ class ContentArmor(BasePlugin):
         *,
         allowed_email_domains: Iterable[str] = (),
         url_forbidden_fields: Iterable[str] = _DEFAULT_URL_FORBIDDEN_FIELDS,
-        base64_threshold: int = 40,
+        base64_threshold: int = 120,
         name: str = "content-armor",
     ) -> None:
         super().__init__(name=name)
@@ -58,6 +58,11 @@ class ContentArmor(BasePlugin):
         self.url_forbidden_fields = frozenset(field.lower() for field in url_forbidden_fields)
         self.base64_threshold = base64_threshold
         self._instruction_patterns = (*_INSTRUCTION_PATTERNS, (
+            # 120, not 40. At 40 this fired on ordinary Google API response
+            # fields — etags, event ids, sync tokens are long random strings —
+            # so every calendar read came back quarantined. An armor that
+            # flags normal traffic gets turned off, which protects nobody.
+            # A payload smuggling instructions needs room; identifiers do not.
             "base64_blob",
             re.compile(
                 rf"(?<![A-Za-z0-9+/])[A-Za-z0-9+/]{{{base64_threshold},}}={{0,2}}(?![A-Za-z0-9+/])"

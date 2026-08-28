@@ -11,28 +11,40 @@ hard part of phase 3 is a phase 1 decision. Written 2026-08-27.
 
 ## Phase 1 — Antigravity as a local orchestrator
 
-**What exists:** an MCP server (`src/adk_harness/mcp_server.py`) registered in
-`~/.gemini/config/mcp_config.json`, exposing each installed harness as a
-governed tool. Verified by speaking MCP to it as a real client: tools listed,
-deny path fired, audit recorded.
+**What exists:** an MCP server (`src/adk_harness/mcp_server.py`), packaged as
+an Antigravity plugin (`plugin/` — `plugin.json` + `mcp_config.json` +
+`skills/` + `rules/`, installed to `~/.gemini/config/plugins`), exposing
+governed Workspace operations — and, behind `ADK_HARNESSES=1`, each installed
+coding harness — as tools. Verified by speaking MCP to it as a real client:
+tools listed, deny path fired, audit recorded. See
+[docs/PROOF.md](PROOF.md) §4 for a captured run and `plugin/README.md` for
+install steps.
 
-**What is unresolved:** whether the Antigravity *IDE* can orchestrate its own
-models. MCP tools sit beside the model the IDE is running; they do not steer
-which model it picks. The `google-antigravity` **SDK** does support this
-directly — `LocalAgentConfig` has both `models: list[ModelTarget]` and
-`subagents: list[SubagentConfig]`, so a lead model can route to subagents pinned
-to different models.
+**The IDE question is answered, and the answer is definitive.** Antigravity
+IDE is a Code-OSS fork of VS Code 1.107.0, installed at
+`/Applications/Antigravity IDE.app` — the `/Applications/Antigravity.app`
+bundle is only a launcher that installs it. Its `extensionsGallery` points at
+Open VSX, so ordinary `.vsix` extensions install normally. But Antigravity's
+own agent (Cascade/Jetski, a Go binary at
+`Contents/Resources/app/extensions/antigravity/bin/language_server_macos_arm`)
+bypasses VS Code's chat and language-model subsystem entirely, and the
+proposed `languageModelSystem` API a third-party extension would need in order
+to register as a model provider is granted in `product.json` only to
+`TeamsDevApp.ms-teams-vscode-extension`. **A third party cannot influence
+Antigravity's own model selection.** MCP — plus the documented plugin bundle
+format above — is the only supported extension surface for adding capability.
 
-So phase 1 has two possible shapes, and they are not equivalent:
+So phase 1 has two shapes, and they are not equivalent:
 
 | Shape | Mechanism | Status |
 |---|---|---|
-| IDE delegates to external harnesses | MCP tools | working today |
-| IDE orchestrates its own models | needs an IDE extension API | unknown — under investigation |
-| SDK agent orchestrates subagents on different models | `subagents` + `models` | supported by the SDK, not yet built |
+| IDE delegates to external harnesses | MCP tools, packaged as the Antigravity plugin | working today — see `plugin/` |
+| IDE orchestrates its own models | would need `languageModelSystem`, restricted to one Microsoft extension in `product.json` | answered: not possible for a third party |
+| SDK agent orchestrates subagents on different models | `google-antigravity`'s `LocalAgentConfig.models` + `.subagents` | supported by the SDK, not yet built; independent of the IDE question above |
 
-The third row is buildable now and is the honest version of "one model
-controlling others". Whether it can live *inside* the IDE is the open question.
+The first row is what this project ships. The third remains open only as an
+SDK-level pattern — a lead agent routing to subagents pinned to different
+models — and has nothing to do with the IDE, since it runs outside it.
 
 ---
 
@@ -106,9 +118,9 @@ people trust and one they route around.
 2. **Move the precedent store to Firestore** — unlocks phase 2.
 3. **Record the approver on the approval** — small, and phase 3 is not
    defensible without it.
-4. **Resolve the IDE question** — whether phase 1's richer form is reachable
-   inside Antigravity, or whether the SDK is where multi-model orchestration
-   lives.
+4. ~~Resolve the IDE question~~ — resolved (see Phase 1 above): the IDE cannot
+   be made to orchestrate its own models from outside Google. Multi-model
+   orchestration, if it is wanted, is an SDK-level pattern, not an IDE one.
 
-Steps 1–3 are worth doing regardless of how step 4 resolves, because they are
-true of any client: an editor, a CLI, or a web UI.
+Steps 1–3 stand on their own regardless of step 4, because they are true of
+any client: an editor, a CLI, or a web UI.

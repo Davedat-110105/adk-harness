@@ -151,7 +151,29 @@ dispatch. `calendar_events_insert` was approved; `calendar_events_list` was
 never in question; `calendar_acl_update` would still be refused outright, because
 it is a different tool. A dispatch-level gate cannot express that distinction.
 
-## 4. Four harnesses, one protocol
+## 4. Google Workspace over MCP
+
+A different path from §3: no ADK `Runner`, no Gemini orchestrator. A real MCP
+client speaks directly to `src/adk_harness/mcp_server.py`, the same gate
+reached a different way — this is also how the Antigravity plugin in
+`plugin/` reaches it (see `plugin/README.md`).
+
+Observed, speaking MCP to the running server as a real client:
+
+- A `calendar_events_list` call returned live data from a real Google
+  Calendar.
+- A `calendar_events_insert` call returned `HELD FOR APPROVAL — nothing has
+  run` — the gate stopped it before the API call, matching the text
+  `governance.py` and `mcp_server.py` produce for `requires_approval`.
+- `governance_audit` showed both decisions, in order.
+
+Nothing beyond those three observations is recorded here. Unlike §3, this run
+was not carried through to a recorded precedent-and-retry; it verifies the MCP
+surface reaches the same gate, not the full precedent loop over MCP.
+
+---
+
+## 5. Four harnesses, one protocol
 
 Discovery against the machine, not a fixture. Four genuinely different
 integration shapes satisfying one 5-method protocol:
@@ -177,7 +199,7 @@ opencode  unknown  unavailable (OpenCode server 'http://127.0.0.1:4096'
 
 ---
 
-## 5. Running it on a real repository
+## 6. Running it on a real repository
 
 ```bash
 GOOGLE_CLOUD_PROJECT=your-project python examples/dogfood.py --cwd . "your task"
@@ -202,7 +224,7 @@ Stated here rather than left to be discovered:
   neither `codex` nor `claude` installed. The stub says so in its own output.
   The transcript in §1 uses a stub for the same reason: it keeps the recording
   about governance rather than about which CLI is present.
-- **§4's opencode row is discovery, not a full run.** The adapter has tests and
+- **§5's opencode row is discovery, not a full run.** The adapter has tests and
   was written against the real binary and its SDK, but no end-to-end opencode
   session is captured here.
 - **`coactra` is a pre-existing dependency**, disclosed in

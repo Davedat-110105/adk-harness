@@ -4,12 +4,13 @@ Several agents work in this repository at once. A file has at most one owner.
 Claim before you write; if what you need is already claimed, report it rather
 than editing it anyway.
 
-Last updated: 2026-08-25.
+Last updated: 2026-08-27.
 
 ## Currently claimed
 
-Nothing. Tasks 1–4 are landed and committed; the files below are now ordinary
-repository files under normal review, not held by anyone.
+Nothing from the original task list. Tasks 1–7 are all landed and committed
+(see [TASKS.md](TASKS.md)); the files below are now ordinary repository files
+under normal review, not held by anyone.
 
 | Files | Landed by | Task |
 |---|---|---|
@@ -18,20 +19,23 @@ repository files under normal review, not held by anyone.
 | `agent.py`, `tests/test_agent.py` | integrator | task 3 — done |
 | `fleet.py`, `tests/test_fleet.py`, `tests/test_fleet_live.py` | integrator | task 4 — done |
 | `examples/fleet/` | integrator | Cloud Run deployment target |
+| `adapters/opencode.py`, `tests/test_adapter_opencode.py` | codex-luna | [task 5](TASKS.md) — done |
+| `stores.py`, `tests/test_stores.py` | codex-luna | [task 6](TASKS.md) — done |
 | `adapters/antigravity.py`, `tests/test_adapter_antigravity.py` | integrator | [task 7](TASKS.md) — done |
 
-## In flight — already assigned, do not edit this table
+The project has since moved past the task-1–7 harness work onto governing
+Google Workspace (`workspace.py`, `governance.py`, `ledger.py`, `armor.py`)
+and exposing it over MCP. That later work was not tracked task-by-task in
+this file, so it is not itemised above; treat any file not listed here or in
+"Frozen" below as ordinary, unclaimed, current-state code rather than
+something this table has an opinion on.
 
-Two agents are working right now. Their claims are recorded here by the
-integrator so that neither has to edit this file and collide with the other.
+## In flight — do not edit these without checking first
 
-| Files | Owner | Task | Notes |
-|---|---|---|---|
-| `adapters/opencode.py`, `tests/test_adapter_opencode.py` | codex-luna | [task 5](TASKS.md) | third integration shape: HTTP + OpenAPI |
-| `stores.py`, `tests/test_stores.py` | codex-luna | [task 6](TASKS.md) | persistent precedents; do **not** edit `precedent.py` |
-
-The integrator is currently working in `governance.py`, `fleet.py`, and
-`examples/fleet/`. Those are live — do not edit them.
+| Files | Notes |
+|---|---|
+| `src/adk_harness/mcp_server.py` | Being actively edited. Do not edit. |
+| `plugin/` | Being actively edited. Do not edit. |
 
 ## Frozen — nobody edits without clearing it first
 

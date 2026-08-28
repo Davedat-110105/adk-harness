@@ -226,6 +226,16 @@ adapter reports `available=False` saying exactly that.
 Codex needs no extra — it is driven as a subprocess, so install the `codex` CLI
 yourself and `adk-harness` will discover it.
 
+## As an MCP server
+
+`python -m adk_harness.mcp_server` exposes governed Google Workspace
+operations — and, behind `ADK_HARNESSES=1`, the coding harnesses above — as
+MCP tools, with no ADK `Runner` or orchestrator model required. This is also
+how the library reaches Google Antigravity: as a plugin (`plugin/`) installed
+to `~/.gemini/config/plugins`. See [plugin/README.md](plugin/README.md) for
+install steps and configuration, and [docs/PROOF.md](docs/PROOF.md) §4 for a
+captured MCP run.
+
 ## Spin-up
 
 Requires Python 3.12+, a Google Cloud project with billing, and the `gcloud` CLI.
@@ -295,7 +305,7 @@ Five rules, stated in full in [docs/agents/CONTRACT.md](docs/agents/CONTRACT.md)
 | Codex | CLI subprocess | Implemented |
 | Claude Code | Python SDK | Implemented |
 | Antigravity | Python SDK + bundled runtime | Implemented |
-| opencode | HTTP + OpenAPI | Planned |
+| opencode | HTTP + OpenAPI | Implemented |
 | Hermes Agent | — | Not planned for v1 |
 | DeepSeek Harness | — | Not planned for v1 |
 

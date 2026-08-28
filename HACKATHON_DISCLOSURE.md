@@ -18,7 +18,10 @@ history falls inside the submission window.
 - The precedent store and its matcher
 - `HarnessRegistry` — discovery, versioning, capability lookup
 - `HarnessAgent`, the ADK `BaseAgent` wrapper
-- The Claude Code, Codex, and opencode adapters
+- The Claude Code, Codex, opencode, and Antigravity adapters
+- Google Workspace governance (`src/adk_harness/workspace.py`) on ADK's
+  official toolsets, exposed over MCP (`src/adk_harness/mcp_server.py`) and
+  packaged as an Antigravity plugin (`plugin/`)
 - The Google Cloud provisioning: Agent Engine, Memory Bank configuration,
   budget, IAM
 - All documentation, the architecture diagram, and the demo
