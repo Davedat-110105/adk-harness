@@ -1,0 +1,5 @@
+{
+  "name": "adk-harness",
+  "version": "0.1.0",
+  "description": "Delegate coding work to Codex, Claude Code or opencode from inside Antigravity, with one policy gate in front of every dispatch and a decision memory so you are asked once rather than every time."
+}
