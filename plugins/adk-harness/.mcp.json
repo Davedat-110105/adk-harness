@@ -8,7 +8,7 @@
         "--python",
         "3.12",
         "--from",
-        "adk-harness[google-workspace] @ git+https://github.com/Davedat-110105/adk-harness.git@e2561c0972782564957d8bf593a444a17fc1b570",
+        "adk-harness[google-workspace] @ git+https://github.com/Davedat-110105/adk-harness.git@efe9195c69aa3b1555e25b9a233a2584fb4955f0",
         "adk-harness",
         "serve"
       ],
