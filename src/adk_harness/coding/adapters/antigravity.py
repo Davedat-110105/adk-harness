@@ -1,99 +1,8 @@
-"""Google Antigravity adapter: drive `google-antigravity`'s `Agent.chat()`.
+"""Google Antigravity adapter using one Agent.chat() session per run.
 
-Verified against the machine, not memory:
-
-- `google-antigravity==0.1.14`, installed into this repo's `.venv` with
-  `.venv/Scripts/python -m pip install google-antigravity`. The wheel is
-  `google_antigravity-0.1.14-py3-none-win_amd64.whl`; every platform wheel
-  bundles a compiled Go `localharness` binary, and the sdist-less
-  distribution means "the package imports" and "the runtime exists" are two
-  different questions (see `discover()`).
-- Class names, the `chat()` entry point, `LocalAgentConfig`'s fields, and the
-  chunk types all come from reading the installed source under
-  `.venv/Lib/site-packages/google/antigravity/` (`__init__.py`, `agent.py`,
-  `types.py`, `models.py`, `conversation/conversation.py`,
-  `connections/connection.py`, `connections/local/local_connection_config.py`,
-  `connections/local/local_connection.py`), not from recollection.
-- No live `agent.chat()` was run while writing this: that spends real Gemini
-  quota. Everything below was read from source or exercised against the
-  config objects directly, which do not call the model.
-
-Why `chat()` and the unified chunk stream
-------------------------------------------
-`ChatResponse` exposes four cursors over one shared buffer: `__aiter__`
-(text deltas as bare strings), `.thoughts`, `.tool_calls`, and `.chunks`.
-The first three are filtered views of the fourth, so only `.chunks` preserves
-the **order** in which the agent actually did things — a tool call that
-happened between two sentences is otherwise unrecoverable. `run()` therefore
-iterates `.chunks` and does its own dispatch, which is also the only cursor
-that surfaces `ToolResult` at all.
-
-Chunk-to-kind mapping
-----------------------
-| chunk type (`google.antigravity.types`) | `HarnessTurn.kind` |
-|---|---|
-| `Text` (response delta) | `text` |
-| `Thought` (reasoning delta) | `text` |
-| `ToolCall` | `tool_call`, `tool_name` from `name`, `tool_args` from `args` |
-| `ToolResult` | `tool_result`, `text` from `error` or `result` |
-| end of turn: `response.usage_metadata` | `usage` |
-| end of turn: a non-`UNSPECIFIED` `response.stop_reason` | `error` |
-| any other `StreamChunk` subtype added later | dropped |
-
-`ToolCall.name` and `ToolResult.name` are typed `BuiltinTools | str`, and
-`BuiltinTools` is a `(str, Enum)` mixin whose `str()` is `"BuiltinTools.RUN_COMMAND"`,
-not `"run_command"` — so the mapping reads `.value` rather than stringifying.
-
-A `ToolResult` carrying an `error` stays a `tool_result`: a tool that failed is
-not the harness failing, and CONTRACT.md reserves `error` for the latter. The
-error text lands in `text` and the whole object in `raw`. A `stop_reason` of
-`MAX_TOOL_CALLS_EXCEEDED` or `QUOTA_EXHAUSTED`, on the other hand, *is* the
-harness stopping short of the work it was asked to do, so that becomes an
-`error` turn — otherwise a truncated run is indistinguishable from a finished
-one.
-
-Session continuity
--------------------
-Genuine, with a condition worth stating plainly. `AgentConfig.conversation_id`
-plus `session_continuation_mode=RESUME` resumes a prior session, and
-`Agent.conversation_id` is the value to pass back — this adapter reports it in
-the final `usage` turn's `tool_args` so a caller has somewhere to read it from.
-
-The condition: sessions are persisted under `save_dir`, and
-`LocalAgentConfig._get_or_create_save_dir()` mints a fresh `tempfile.mkdtemp()`
-when `save_dir` is unset. A harness constructed without `save_dir` therefore
-writes every session into a directory nothing will ever look at again, and
-resume cannot work no matter what id is passed. So `session_resume` is
-advertised in `HarnessSpec.capabilities` **only** when this adapter was
-constructed with a `save_dir`. Claiming it unconditionally would be exactly the
-"believes it has continuity when it does not" failure CONTRACT.md warns about.
-
-`RESUME` is used rather than `CREATE_OR_RESUME` for the same reason: a resume
-that silently starts a brand-new session when the old one is gone is a lie the
-caller cannot detect. Failing loudly becomes one `error` turn.
-
-Permissions
------------
-CONTRACT.md rule 1: an adapter never decides whether an action is permitted.
-`LocalAgentConfig`'s own defaults are left exactly as they ship — all builtin
-tools enabled, `policies=policy.confirm_run_command()`, and file tools fenced
-to `workspaces`. This adapter does not pass `policies=[policy.allow_all()]` to
-unlock autonomous shell access, and does not narrow the capability set either;
-`CoactraGovernance` is the governance layer, and a caller who wants different
-vendor-side defaults passes `capabilities` or `policies` explicitly.
-
-Note that the SDK is fail-closed about this: `Agent.__aenter__` raises
-`ValueError` when write-capable tools or MCP servers are enabled with no policy
-and no `PreToolCallDecide` hook. The shipped default satisfies that check, so
-leaving it alone is both the conservative choice and the working one.
-
-Working directory
-------------------
-`cwd` maps to `workspaces=[cwd]`, which is the SDK's file-access boundary —
-`LocalAgentConfig` defaults it to `os.getcwd()`, and the policy evaluator
-restricts file tools to it. It is the closest thing the SDK has to a working
-directory, and it is the same value `governance.py` keys the policy resource
-on, so the gate and the harness are talking about the same place.
+The unified .chunks stream preserves text/tool ordering and tool results.
+Session resume requires save_dir; the conversation ID is returned with usage.
+Vendor permission defaults remain intact, and cwd sets the workspace boundary.
 """
 
 from __future__ import annotations
@@ -110,31 +19,18 @@ from adk_harness.coding.protocol import HarnessSpec, HarnessTurn
 
 __all__ = ["AntigravityHarness"]
 
-# The SDK reads this itself (`_HARNESS_PATH_ENV_VAR` in
-# `connections/local/local_connection.py`) before falling back to the bundled
-# wheel resource and then to PATH. `discover()` checks the same three places in
-# the same order, so it cannot report "no runtime" for a machine the SDK would
-# in fact have run on.
+# Match the SDK runtime lookup: environment override, bundled wheel, then PATH.
 _HARNESS_PATH_ENV_VAR = "ANTIGRAVITY_HARNESS_PATH"
 
 
 def _tool_name(name: Any) -> str:
-    """Render `BuiltinTools | str` as the plain tool name.
-
-    `BuiltinTools` is a `(str, Enum)` mixin, so `str()` yields
-    `"BuiltinTools.RUN_COMMAND"`. `.value` is the name the vendor uses on the
-    wire and the one a policy would be written against.
-    """
+    """Use the enum value as the wire tool name, not its qualified string form."""
     value = getattr(name, "value", name)
     return value if isinstance(value, str) else str(name)
 
 
 def _result_text(result: Any) -> str | None:
-    """Best plain-text rendering of a `ToolResult.result` for `text`.
-
-    The full object survives in `raw` regardless; this only exists for callers
-    that read `text` and nothing else.
-    """
+    """Render a tool result as text; the full payload remains in raw."""
     if result is None:
         return None
     if isinstance(result, str):
@@ -160,13 +56,7 @@ def _localharness_binary() -> str | None:
 
 
 class AntigravityHarness:
-    """Run Google Antigravity through its SDK, one `Agent` session per `run()` call.
-
-    Each `run()` opens its own `Agent` context and closes it when the stream
-    ends or the caller walks away, which keeps cleanup to a single unwinding
-    path — the same reasoning that made the Claude Code adapter prefer a
-    one-shot `query()` over a long-lived client.
-    """
+    """Run one SDK Agent context per invocation and close it with the stream."""
 
     def __init__(
         self,
@@ -187,21 +77,11 @@ class AntigravityHarness:
         self.system_instructions = system_instructions
         self.save_dir = save_dir
         self.spec = HarnessSpec(id="antigravity", version="unknown", available=False)
-        # One dict per in-flight run, holding the async generator `run()`
-        # returned and the vendor `ChatResponse` once it exists, so `aclose()`
-        # can cancel the turn and unwind the `Agent` context of a run the
-        # caller abandoned mid-stream. A run removes its own holder when it
-        # finishes; `aclose()` drains whatever is left.
+        # Track per-run resources so shutdown can close abandoned streams.
         self._active_runs: list[dict[str, Any]] = []
 
     def _config_kwargs(self) -> dict[str, Any]:
-        """The constructor's vendor-facing fields, minus the unset ones.
-
-        `LocalAgentConfig.__init__` drops `None` values itself, but building the
-        dict here keeps `discover()` and `run()` provably configured the same
-        way — a credential check that validated a different config than the one
-        that runs is worse than no check.
-        """
+        """Share the same non-None vendor settings between discovery and execution."""
         kwargs: dict[str, Any] = {
             "model": self.model,
             "api_key": self.api_key,
@@ -250,14 +130,7 @@ class AntigravityHarness:
                 )
                 return self.spec
 
-            # Credentials are checked by building the config the way `run()`
-            # will and asking the SDK's own endpoint validator about it, rather
-            # than reimplementing which env var means what. `GEMINI_API_KEY`,
-            # the `GOOGLE_GENAI_USE_VERTEXAI` / `GOOGLE_GENAI_USE_ENTERPRISE`
-            # switches, and `GOOGLE_CLOUD_PROJECT` / `GOOGLE_CLOUD_LOCATION` are
-            # all read by the vendor code this calls, so the answer here cannot
-            # drift from what an actual run would do. None of it opens a
-            # connection or spends quota.
+            # Validate the same SDK config used by run(), without opening a connection.
             config = LocalAgentConfig(**self._config_kwargs())
             try:
                 for target in config.models or ():
@@ -285,10 +158,7 @@ class AntigravityHarness:
             )
             return self.spec
         except Exception as exc:
-            # CONTRACT.md rule 3: discover() must not raise. Config construction
-            # runs pydantic validators, and a future one could reject something
-            # this adapter passes; that should read as "unavailable, here is
-            # why" rather than take down a fleet that has other harnesses.
+            # Discovery failures must become unavailable specs, not escape to the caller.
             self.spec = HarnessSpec(
                 id="antigravity",
                 version="unknown",
@@ -347,9 +217,7 @@ class AntigravityHarness:
         try:
             config = LocalAgentConfig(**kwargs)
         except Exception as exc:
-            # `conversation_id` is validated for length and character set, and
-            # `workspaces` for shape. A caller's bad session id is an error
-            # turn, not an exception thrown through their `async for`.
+            # Invalid SDK config becomes an error turn rather than escaping the stream.
             self._forget(holder)
             yield HarnessTurn(kind="error", text=str(exc), raw=exc)
             return
@@ -377,14 +245,7 @@ class AntigravityHarness:
                 for turn in self._closing_turns(response, agent):
                     yield turn
             except Exception as exc:
-                # Connection loss, model errors, tool-execution failures: the
-                # SDK raises several unrelated exception types with no shared
-                # base (`AntigravityConnectionError`, `AntigravityExecutionError`,
-                # `ToolExecutionError`, ...), so they are caught as a group and
-                # reported. `AntigravityCancelledError` subclasses
-                # `asyncio.CancelledError`, which is a `BaseException` — it
-                # deliberately passes straight through, because a cancelled
-                # caller does not want a turn, it wants to stop.
+                # Vendor failures become error turns; cancellation propagates.
                 yield HarnessTurn(kind="error", text=str(exc), raw=exc)
             finally:
                 await agent.__aexit__(None, None, None)
@@ -404,12 +265,7 @@ class AntigravityHarness:
         tool_call_type: type,
         tool_result_type: type,
     ) -> HarnessTurn | None:
-        """Map one chunk off `ChatResponse.chunks`, or drop it.
-
-        The vendor types arrive as arguments rather than module-level imports
-        because CONTRACT.md rule 2 forbids importing them at import time, and
-        `isinstance` needs the real classes.
-        """
+        """Map a chunk using lazily imported vendor types, or drop unknown types."""
         if isinstance(chunk, (thought_type, text_type)):
             # Thought first: both are StreamChunk subclasses carrying `.text`,
             # and reasoning is `text` per CONTRACT.md either way.
@@ -433,13 +289,7 @@ class AntigravityHarness:
         return None
 
     def _closing_turns(self, response: Any, agent: Any) -> list[HarnessTurn]:
-        """Usage and short-stop turns, read once the chunk stream is exhausted.
-
-        Both `usage_metadata` and `stop_reason` are only meaningful after the
-        turn completes, and both reach through `ChatResponse` into the
-        conversation — so each is read defensively. A missing accounting field
-        must not turn a successful run into a failed one.
-        """
+        """Read final usage and stop reasons defensively; missing accounting is not a run failure."""
         turns: list[HarnessTurn] = []
         try:
             usage = response.usage_metadata
@@ -452,9 +302,7 @@ class AntigravityHarness:
                 if value is not None
             }
             summary = ", ".join(f"{key}={value}" for key, value in counts.items())
-            # The conversation id rides along here because it is the value a
-            # caller needs to pass back as `session_id`, and there is no other
-            # turn on which it belongs.
+            # Return the conversation ID for the next session_id.
             conversation_id = getattr(agent, "conversation_id", None)
             if conversation_id:
                 counts["conversation_id"] = conversation_id
@@ -485,13 +333,9 @@ class AntigravityHarness:
                 try:
                     await response.cancel()
                 except Exception:
-                    # Best effort: a turn that already finished, or a
-                    # connection already gone, must not stop us from unwinding
-                    # the rest of the runs below.
+                    # A finished turn must not prevent cleanup of other runs.
                     pass
             stream = holder.get("stream")
             if stream is not None:
-                # Closing the generator is what runs its `finally` and exits
-                # the `Agent` context, which is what actually releases the
-                # localharness subprocess.
+                # Closing the generator exits Agent and releases the subprocess.
                 await stream.aclose()

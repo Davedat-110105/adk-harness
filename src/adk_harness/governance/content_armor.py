@@ -1,10 +1,7 @@
-"""Defence-in-depth screening for untrusted content and tool arguments.
+"""Local screening of untrusted content and tool arguments.
 
-Gmail, Docs, and Drive content is data, never executable instruction. Model
-Armor screens user input, retrieved content, and outbound tool arguments; this
-plugin focuses on the retrieved-content and outbound-tool callback boundaries.
-These patterns are defence in depth, not a guarantee against a determined
-attacker, so callers must still treat external content as untrusted.
+This is defense in depth, not a prompt-injection guarantee or managed Model Armor.
+External content remains untrusted.
 """
 
 from __future__ import annotations
@@ -58,11 +55,7 @@ class ContentArmor(BasePlugin):
         self.url_forbidden_fields = frozenset(field.lower() for field in url_forbidden_fields)
         self.base64_threshold = base64_threshold
         self._instruction_patterns = (*_INSTRUCTION_PATTERNS, (
-            # 120, not 40. At 40 this fired on ordinary Google API response
-            # fields — etags, event ids, sync tokens are long random strings —
-            # so every calendar read came back quarantined. An armor that
-            # flags normal traffic gets turned off, which protects nobody.
-            # A payload smuggling instructions needs room; identifiers do not.
+            # Exclude ordinary API IDs and etags; inspect only longer encoded payloads.
             "base64_blob",
             re.compile(
                 rf"(?<![A-Za-z0-9+/])[A-Za-z0-9+/]{{{base64_threshold},}}={{0,2}}(?![A-Za-z0-9+/])"

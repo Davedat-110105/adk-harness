@@ -1,26 +1,7 @@
-"""OpenCode HTTP adapter.
+"""OpenCode HTTP adapter using the server's SSE event stream.
 
-Verified on 2026-08-25 against the installed ``opencode`` binary:
-
-    $ /Users/datta/.opencode/bin/opencode --version
-    1.17.9
-
-    $ /Users/datta/.opencode/bin/opencode --help
-    $ /Users/datta/.opencode/bin/opencode serve --help
-
-``serve`` is the headless server command. Its help documents ``--hostname``
-(default ``127.0.0.1``) and ``--port`` (default ``0``, an automatically chosen
-port). The binary contains the OpenAPI routes ``/global/health``, ``/session``,
-``/session/{sessionID}/message``, and the SSE ``/event`` endpoint. The installed
-OpenAPI-generated SDK at ``~/.opencode/node_modules/@opencode-ai/sdk`` (package
-version 1.15.0) describes ``/event`` as a JSON SSE stream whose records have a
-``type`` and ``properties`` object; text, tool, usage, idle, and error records
-are represented by the ``message.part.*``, ``session.next.*``,
-``message.updated``, ``session.idle``, and ``session.error`` variants.
-
-The adapter subscribes to that SSE stream before posting a prompt, so callers
-see progress instead of waiting for the blocking prompt response. A supplied
-``session_id`` is sent to the existing session; no history is replayed.
+Subscribe before posting the prompt to capture progress. A supplied session_id
+continues that session without replaying history.
 """
 
 from __future__ import annotations

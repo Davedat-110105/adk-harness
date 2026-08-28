@@ -1,22 +1,4 @@
-# Cloud Run image for the governed fleet demo.
-#
-# Why this file exists rather than `adk deploy cloud_run`
-# -------------------------------------------------------
-# `adk deploy cloud_run` generates a Dockerfile at deploy time and hands it to
-# Cloud Build. That is convenient, but the generated file makes three choices
-# that are wrong for this project:
-#
-#   1. `FROM python:3.11-slim`. This package requires Python 3.12, so pip
-#      refuses to install it — the build fails before anything runs.
-#   2. `ENV GOOGLE_CLOUD_LOCATION=<--region>`. It reuses the Cloud Run region as
-#      the Vertex location, so deploying to us-central1 sets the Vertex location
-#      to us-central1 — where `gemini-3.5-flash` returns HTTP 404. The service
-#      would deploy green and fail on the first message.
-#   3. `pip install -r requirements.txt` in a slim image, which has no git, so a
-#      `git+https://` dependency cannot resolve.
-#
-# Writing the image directly fixes all three and removes the network fetch of
-# our own package entirely: the source is copied in and installed from disk.
+# Cloud Run demo: install local sources with Python 3.12.
 
 FROM python:3.12-slim
 
@@ -24,9 +6,7 @@ WORKDIR /app
 
 RUN adduser --disabled-password --gecos "" appuser
 
-# Vertex, not the Gemini API. `global` is not interchangeable with the Cloud Run
-# region: gemini-3.5-flash resolves only on `global` and 404s in us-central1,
-# while gemini-2.5-flash works in both — so getting this wrong fails late.
+# Keep the Vertex model location separate from the Cloud Run region.
 ENV GOOGLE_GENAI_USE_ENTERPRISE=true \
     GOOGLE_CLOUD_LOCATION=global \
     ADK_HARNESS_WORKSPACE=/workspace \
@@ -38,9 +18,7 @@ COPY src/ ./src/
 COPY plugins/antigravity/ ./plugins/antigravity/
 RUN pip install --no-cache-dir ".[tracing,google-workspace,ledger]"
 
-# ADK expects an agents directory holding one folder per agent. Both are
-# served by one container: /fleet governs coding harnesses, /workspace
-# governs Google Calendar. Same gate, same audit trail.
+# ADK loads one agent per directory.
 COPY --chown=appuser:appuser examples/agents/fleet/ /app/agents/fleet/
 COPY --chown=appuser:appuser examples/agents/workspace/ /app/agents/workspace/
 

@@ -1,31 +1,7 @@
-"""Present a harness as an ADK agent.
+"""Wrap a coding harness as an ADK agent that streams events.
 
-`HarnessAgent` is the seam between two worlds. On one side is a coding-agent
-harness that runs as its own process and makes its own decisions. On the other
-is ADK, which expects a `BaseAgent` yielding `Event`s. This wraps the first as
-the second, so a Gemini orchestrator can dispatch to Claude Code or Codex the
-same way it dispatches to any other sub-agent.
-
-Where governance actually applies
----------------------------------
-Be precise about this, because it is easy to overclaim.
-
-A `HarnessAgent` is meant to be exposed to an orchestrator as an `AgentTool`.
-That tool call passes through `CoactraGovernance`, which decides whether *this
-harness may be dispatched into this working directory for this task*. That is
-the enforced boundary, and it is the one the policy is written against —
-`governance.py` keys the policy resource on `cwd` for exactly this reason.
-
-The tool calls a harness makes *inside* its own run — the individual file edits
-and shell commands — do not pass back through ADK, because the harness executes
-them in its own process. This agent surfaces them as events so they land in the
-session transcript and are visible to an auditor, but it does not pretend to
-have stopped them. Per-call enforcement inside a harness requires that harness's
-own permission hook, and wiring one belongs to the adapter's vendor surface, not
-here.
-
-So: dispatch is gated, inner activity is observed. Saying otherwise would make
-the audit trail a liar, and an audit trail nobody can trust is worse than none.
+Governance gates AgentTool dispatch, not the vendor's inner file or shell calls.
+Inner activity is reported as text; enforcement requires vendor permission hooks.
 """
 
 from __future__ import annotations
@@ -46,12 +22,7 @@ __all__ = ["HarnessAgent"]
 
 
 class HarnessAgent(BaseAgent):
-    """Run one harness as an ADK agent, streaming its work as events.
-
-    The agent holds no policy of its own. It streams; the governance plugin
-    sitting in front of the tool call that reached here has already decided
-    whether this run happens at all.
-    """
+    """Stream one harness as ADK events after the governance gate permits dispatch."""
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
@@ -106,9 +77,7 @@ class HarnessAgent(BaseAgent):
             yield self._event(ctx, text="No prompt was provided to the harness.")
             return
 
-        # The registry intentionally shares adapter instances.  Closing here
-        # would terminate a sibling invocation using the same harness; each
-        # adapter owns cleanup of its per-run resources instead.
+        # Close only this stream; closing the shared harness would cancel sibling runs.
         stream = self.harness.run(prompt, cwd=self.cwd, session_id=self.session_id)
         try:
             async for turn in stream:
@@ -122,13 +91,9 @@ class HarnessAgent(BaseAgent):
                 await close()
 
     def _event_for_turn(self, ctx: InvocationContext, turn: HarnessTurn) -> Event | None:
-        """Render one harness turn as an ADK event.
+        """Render harness activity as ADK events.
 
-        Inner tool activity becomes readable text rather than an ADK function
-        call. An ADK `FunctionCall` event means "the model is asking the runtime
-        to run this", and the runtime would then try to run it — but the harness
-        already ran it in its own process. Emitting one would be a lie about who
-        did what, and it would double-execute if anything downstream believed it.
+        Inner tool activity must stay text: FunctionCall events could execute it again.
         """
         if turn.kind == "text":
             return self._event(ctx, text=turn.text or "")
@@ -160,13 +125,7 @@ class HarnessAgent(BaseAgent):
 
 
 def _prompt_of(ctx: InvocationContext) -> str:
-    """Recover the user's request as plain text.
-
-    A harness takes a string. ADK carries structured `Content`. Non-text parts
-    (images, inline data) are dropped rather than serialized into the prompt,
-    because a harness that reads a base64 blob as instructions behaves worse
-    than one that never saw it.
-    """
+    """Extract text from ADK Content; do not serialize images or binary data as instructions."""
     content = ctx.user_content
     if content is None or not content.parts:
         return ""

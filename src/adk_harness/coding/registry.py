@@ -1,9 +1,4 @@
-"""Harness discovery and lookup.
-
-This is the Agent Registry: what is installed, at what version, and what it can
-do. It imports nothing vendor-specific and nothing from ADK, which is what lets
-the SDK install and run with only a subset of the harnesses present.
-"""
+"""Discover available harnesses and look them up by ID or capability."""
 
 from __future__ import annotations
 
@@ -47,12 +42,7 @@ class HarnessRegistry:
         self._specs[harness.spec.id] = harness.spec
 
     async def discover_all(self) -> tuple[HarnessSpec, ...]:
-        """Probe every harness concurrently.
-
-        A harness that raises during discovery is recorded as unavailable with
-        the error in `detail`, never propagated. One broken adapter must not
-        take down a fleet that has other working ones.
-        """
+        """Probe concurrently; discovery failures become unavailable specs with details."""
         ids = tuple(self._harnesses)
         results = await asyncio.gather(
             *(self._harnesses[i].discover() for i in ids),
@@ -70,9 +60,7 @@ class HarnessRegistry:
                 )
             else:
                 self._specs[harness_id] = result
-                # Adapters normally update ``self.spec`` themselves. Keep the
-                # object consumed by fleet wiring in sync for simple custom
-                # adapters that only return the discovered spec.
+                # Keep fleet wiring in sync when an adapter returns a spec without storing it.
                 try:
                     self._harnesses[harness_id].spec = result
                 except (AttributeError, TypeError):
@@ -108,12 +96,7 @@ class HarnessRegistry:
 
 
 def default_registry(*, include_antigravity: bool = True) -> HarnessRegistry:
-    """Build the standard registry, including optional third party plugins.
-
-    Imports are deliberately local: a base install remains usable without any
-    vendor SDKs. Entry point failures become unavailable specs instead of
-    taking down the working adapters.
-    """
+    """Load built-ins and optional entry points, isolating broken extensions."""
     factories: dict[str, Any] = {}
     from adk_harness.coding.adapters import ClaudeCodeHarness, CodexHarness, OpenCodeHarness
 

@@ -12,12 +12,7 @@ license = { text = "MIT" }
 keywords = ["adk", "gemini", "agents", "claude-code", "codex", "opencode", "antigravity"]
 dependencies = [
     "google-adk[db,mcp]>=2.7,<3",
-    # Bounded deliberately, and widened only after testing. coactra is pre-1.0
-    # alpha and ships breaking changes without shims — 0.6.0 renamed
-    # coactra.agent.adapters to coactra.agent.backends — so an unbounded pin
-    # means a coactra release could break `pip install adk-harness` without a
-    # line changing here. The floor is 0.7.0 for its canonical tool.call action.
-    # Widen the ceiling after testing, not in anticipation.
+    # Coactra is pre-1.0; widen this bound only after compatibility testing.
     "coactra>=0.7.0,<0.8",
 ]
 
@@ -27,22 +22,13 @@ adk-harness = "adk_harness.cli.main:main"
 [project.optional-dependencies]
 claude-code = ["claude-agent-sdk>=0.2,<1"]
 opencode = ["httpx>=0.27"]
-# Google Workspace harnesses. Kept optional: the base install must not need
-# them, and a machine without them reports available=False rather than failing.
+# Optional API clients; base imports must work without them.
 google-workspace = ["google-api-python-client>=2.100", "google-auth>=2.30"]
-# Firestore backs the append-only action ledger the PRD requires.
 ledger = ["google-cloud-firestore>=2.16"]
-# Bounded at the minor, because 0.1.x is an alpha ("Development Status :: 3")
-# that ships a compiled localharness binary per platform wheel — the Python
-# surface and the wire protocol move together, so a 0.2 is a runtime change and
-# not just an API one. The floor is what has been verified: 0.1.14, against
-# which the offline suite, lint, and types all pass. Its `mcp<2,>=1.0` pin
-# overlaps google-adk's own `mcp>=1.24,<2`, so the two resolve together.
+# The SDK bundles a platform runtime; minor upgrades need compatibility testing.
 antigravity = ["google-antigravity>=0.1.14,<0.2"]
 a2a = ["google-adk[a2a]>=2.7,<3"]
-# ADK's --trace_to_cloud imports opentelemetry.exporter.cloud_trace, which lives
-# in google-adk's own `all` extra rather than its `gcp` one. Depending on the
-# exporter directly keeps the Cloud Run image small.
+# Required for ADK --trace_to_cloud without its broad all extra.
 tracing = ["opentelemetry-exporter-gcp-trace>=1.9,<2"]
 # All runtime integrations; developer tooling remains a separate opt-in.
 all = ["adk-harness[claude-code,opencode,antigravity,google-workspace,ledger,a2a,tracing]"]
@@ -60,8 +46,7 @@ include = [
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/adk_harness"]
-# The plugin ships inside the package so `adk-harness setup` can install it
-# without the user having cloned the repository.
+# Bundle the plugin for setup without a repository checkout.
 force-include = { "plugins/antigravity" = "adk_harness/plugins/antigravity" }
 
 [tool.pytest.ini_options]
@@ -72,13 +57,9 @@ target-version = "py312"
 line-length = 100
 
 [tool.ruff.lint]
-# Explicit, so a ruff upgrade cannot change what CI enforces underneath us.
 select = ["E", "F", "I", "UP", "B", "C4", "RET", "RUF", "PL"]
 ignore = [
-    # Contract rule 2 requires adapters to import their vendor SDK *inside*
-    # discover(), never at module level, so that a missing harness degrades to
-    # available=False instead of breaking the import. This rule forbids exactly
-    # the thing the architecture requires.
+    # Vendor SDK imports must stay lazy.
     "PLC0415",
     "PLR0911",  # several early returns is how the policy gate reads best
     "PLR0912",  # the vendor-event mapping is a wide branch by nature
@@ -87,21 +68,15 @@ ignore = [
 ]
 
 [tool.pyright]
-# Without this, pyright resolves against the system interpreter and reports
-# every third-party import as missing.
+# Match the development interpreter.
 venvPath = "."
 venv = ".venv"
 include = ["src"]
 pythonVersion = "3.12"
 
 [tool.ruff.lint.per-file-ignores]
-# The module docstring carries a markdown table mapping vendor event tags onto
-# HarnessTurn kinds. Wrapping the rows breaks the table, and the table is the
-# most useful thing in the file.
+# Preserve long vendor payload lines.
 "src/adk_harness/coding/adapters/codex.py" = ["E501"]
-# These replay real vendor payloads. Reflowing them makes the fixture stop
-# looking like what the vendor actually sends, which is the point of it.
 "tests/coding/adapters/test_codex.py" = ["E501"]
 "tests/coding/adapters/test_claude_code.py" = ["E501"]
-# Same reason as codex.py: the module docstring carries the chunk-to-kind table.
 "src/adk_harness/coding/adapters/antigravity.py" = ["E501"]

@@ -1,20 +1,7 @@
-"""Assemble a governed fleet: one Gemini orchestrator, many harnesses.
+"""Build a Gemini orchestrator with a shared policy gate for harness dispatch.
 
-`build_fleet` is the function most users of this SDK will call. It takes a
-registry of harnesses and returns an ADK `App` — a Gemini agent that can
-dispatch work to whichever harnesses are installed, with a single Coactra
-policy gate in front of all of them.
-
-One gate, not one per harness. That is the point of the whole library. If each
-harness carried its own permission model, the answer to "may this happen?" would
-depend on which harness the orchestrator happened to pick, and a fleet whose
-rules vary by worker is not governed — it is merely supervised, inconsistently.
-So the gate, the audit trail, and the precedent store are shared, and every
-dispatch passes through them identically.
-
-The gate fires because ADK's `AgentTool` defaults to `include_plugins=True`,
-which routes tool calls made against a wrapped agent through the app's plugins.
-See `harness_agent.py` for exactly what the gate does and does not cover.
+AgentTool includes app plugins by default. Vendor inner actions remain outside
+this gate; see harness_agent.py.
 """
 
 from __future__ import annotations
@@ -45,13 +32,7 @@ DEFAULT_MODEL = "gemini-3.5-flash"
 
 @dataclass(frozen=True, slots=True)
 class Fleet:
-    """Everything the caller needs to run and to answer for a fleet.
-
-    `governance` is returned rather than hidden because a human has to be able
-    to reach it: to read the audit trail, and to call `remember()` when they
-    answer a confirmation, which is what stops the same question being asked
-    again tomorrow.
-    """
+    """The ADK app, discovered harnesses, and governance API for audits and human decisions."""
 
     app: App
     orchestrator: LlmAgent
@@ -76,16 +57,9 @@ async def build_fleet(
     instruction: str | None = None,
     skip_summarization: bool = False,
 ) -> Fleet:
-    """Discover what is installed and wire it into one governed app.
+    """Discover harnesses and build a governed ADK app.
 
-    Discovery happens here rather than being left to the caller because the
-    orchestrator's instruction has to name the harnesses that actually exist.
-    Telling a model it may delegate to Codex on a machine without Codex
-    produces confident dispatch to nothing.
-
-    Raises `RuntimeError` when no harness is available. That is a real dead end
-    — an orchestrator with no workers cannot do the one thing it is for — and
-    failing at build time gives a clearer message than failing at dispatch.
+    Raises RuntimeError when no harness is available.
     """
     specs = await registry.discover_all()
     available = registry.available()
@@ -107,8 +81,6 @@ async def build_fleet(
         resources={_tool_name(h.spec.id): cwd for h in available},
     )
 
-    # Annotated as the union ADK declares rather than list[AgentTool]: list is
-    # invariant, so the narrower type is not assignable to LlmAgent.tools.
     tools: list[Any] = [
         AgentTool(
             agent=HarnessAgent(
@@ -150,14 +122,7 @@ def _describe(spec: HarnessSpec) -> str:
 
 
 def _instruction(specs: Sequence[HarnessSpec], cwd: str) -> str:
-    """Tell the model what it has, and tell it the truth about refusals.
-
-    The last paragraph matters more than it looks. When policy denies a tool
-    call, the gate returns a blocked result rather than raising, precisely so
-    the model can report the refusal to the user. A model that instead retries
-    the same call in a loop, or invents a workaround, turns a clean governance
-    decision into a mess. So it is instructed not to.
-    """
+    """Describe available harnesses and require the model to respect refusals."""
     lines = []
     for spec in specs:
         if spec.available:
@@ -182,18 +147,10 @@ def _instruction(specs: Sequence[HarnessSpec], cwd: str) -> str:
 
 
 def build_fleet_sync(**kwargs: Any) -> Fleet:
-    """Build a fleet from a module-level import.
+    """Build a fleet during an ADK module import.
 
-    ADK's deployment convention is to `import` a module and read `app` off it,
-    which means the fleet has to exist before anything awaits. Discovery is
-    async — it probes several harnesses concurrently — so this bridges the two.
-
-    If a loop is already running (ADK's web server loads agent modules from
-    inside one), `asyncio.run` would raise, so the build is handed to a worker
-    thread. Discovery is I/O against local binaries, so a thread is the right
-    shape for it and the wait is short.
-
-    Prefer `build_fleet` anywhere you can already await.
+    Uses a worker thread when an event loop is already running. Prefer the async
+    build_fleet() when callers can await.
     """
     try:
         asyncio.get_running_loop()

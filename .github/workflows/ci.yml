@@ -45,12 +45,7 @@ jobs:
           ADK_HARNESS_INSTALL_TEST: "1"
         run: python -m pytest tests/installation -q
 
-  # The claim this package makes is that a harness you have not installed
-  # degrades to `available=False` rather than breaking the import. A CI runner
-  # has no codex binary, no claude binary, no opencode server and no
-  # antigravity SDK, so it is the honest place to check that — and it only
-  # checks it if the optional extras are genuinely absent. Keep this job
-  # dependency-free on purpose.
+  # Keep vendor extras absent to test graceful discovery failures.
   base-install:
     name: Base install, no harness present
     runs-on: ubuntu-latest
@@ -115,9 +110,7 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e ".[dev,all,tracing]"
 
-      # ADK_HARNESS_LIVE is deliberately unset. The live tests call Vertex and
-      # cost money, and CI has no credentials — they skip, and the summary below
-      # says so out loud rather than letting 4 silent skips look like coverage.
+      # Live tests require credentials and explicit opt-in.
       - name: Run the offline suite
         run: pytest -q
 
@@ -156,11 +149,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # The deployed demo is the project's main piece of evidence, and its image
-      # has broken twice in ways the test suite could not see: a Python version
-      # the package refuses to install on, and a missing OpenTelemetry exporter
-      # that only surfaced at container start. Building it here catches both
-      # without waiting for a Cloud Build round trip.
+      # Catch image-only dependency and startup failures.
       - name: Build the image
         run: docker build -t adk-harness-fleet:ci .
 

@@ -1,25 +1,7 @@
-"""Expose governed harnesses to any MCP client — Antigravity, Codex, Claude Code.
+"""Serve governed Workspace tools over stdio with `adk-harness serve`.
 
-Run this and the harnesses on your machine become tools inside your editor,
-each one passing the same Coactra policy gate before it does anything.
-
-    python -m adk_harness.mcp.server
-
-There is no orchestrator here on purpose. The MCP client already has a model —
-that is what you are typing into. Adding a second one would mean paying for a
-model to decide which harness to use, when the model you are already talking to
-can decide that itself. What this adds is the gate, the audit trail and the
-precedent loop, which the client does not have.
-
-Antigravity reads `~/.gemini/config/mcp_config.json`:
-
-    {"mcpServers": {"adk-harness": {
-        "command": "/path/to/.venv/bin/python",
-        "args": ["-m", "adk_harness.mcp.server"],
-        "env": {"ADK_HARNESS_WORKSPACE": "/path/to/repo"}}}}
-
-Antigravity itself is deliberately not offered as a tool. You are already inside
-it; handing it back to itself would be a loop with a bill attached.
+The MCP client supplies the model; no additional orchestrator is needed.
+Coding harnesses are opt-in. Antigravity is excluded to avoid recursive dispatch.
 """
 
 from __future__ import annotations
@@ -75,14 +57,7 @@ WRITE_VERBS = (
 
 
 class EditorPolicy:
-    """Reads flow. Anything other people will see asks a person. Sharing is refused.
-
-    Two rules learned the hard way. Whole words, not substrings: an earlier
-    version matched "token" anywhere and refused ordinary prose. And it fails
-    closed — an operation matching no known verb asks rather than proceeds,
-    because a first version omitted "create" from the write list and a Gmail
-    draft was written to a real mailbox judged as "only reads".
-    """
+    """Allow named reads, hold writes and unknown operations, and deny sending or sharing."""
 
     def __init__(self, root: Path) -> None:
         self._root = root.resolve()
@@ -191,12 +166,7 @@ class _Tool:
 
 
 class _Context:
-    """Records a confirmation request instead of pausing an ADK run.
-
-    An MCP client has no confirmation channel, so the tool returns the question
-    as its result and the person answers by saying so in the editor. That is
-    honest: the work has not happened, and the transcript says why.
-    """
+    """Record confirmation requests; the MCP result reports a hold without executing."""
 
     def __init__(self) -> None:
         self.asked: list[str] = []
@@ -347,17 +317,7 @@ async def _register_workspace(
     server: Any,
     gate: CoactraGovernance,
 ) -> list[str]:
-    """Expose Google Workspace operations as governed MCP tools.
-
-    Each operation is its own tool, so the gate judges `calendar_events_insert`
-    separately from `calendar_events_list` — which is what the PRD means by
-    "the gateway evaluates every tool call; approval at initial dispatch is
-    insufficient."
-
-    A service whose scope the credentials do not carry is skipped with a note
-    rather than exposed as a tool that would fail. An editor showing a tool that
-    always errors is worse than one that shows fewer tools.
-    """
+    """Register individual Workspace operations, skipping services with unavailable credentials."""
     from google.adk.auth.auth_credential import ServiceAccount
 
     from adk_harness.workspace import SCOPES, TOOLSETS, check_workspace_service_access
@@ -460,12 +420,7 @@ def _ledger_scope(gate: CoactraGovernance) -> str:
 
 
 async def _registry() -> HarnessRegistry:
-    """Coding harnesses, when this server is asked to expose them.
-
-    Off by default. The Google surface is the point; coding agents are a second
-    concern and adding them silently would double the tool list for people who
-    only wanted Workspace. Set ADK_HARNESSES=1 to include whichever are present.
-    """
+    """Discover coding harnesses only when ADK_HARNESSES=1."""
     if os.environ.get("ADK_HARNESSES") != "1":
         return HarnessRegistry([])
 

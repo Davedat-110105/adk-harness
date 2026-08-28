@@ -1,35 +1,7 @@
-"""Governed Google Workspace fleets, built on ADK's own toolsets.
+"""Build a governed app from ADK's Google Workspace toolsets.
 
-Why this is not another adapter
--------------------------------
-This package's `Harness` protocol exists because Claude Code, Codex, opencode
-and Antigravity have nothing in common — each needed wrapping before a fleet
-could treat them alike. Google Workspace is different: ADK already ships
-`CalendarToolset`, `GmailToolset`, `DocsToolset` and friends, generated from
-Google's own API discovery documents.
-
-Hand-writing a Calendar adapter reimplemented that, worse. It was gated at
-*dispatch* — one decision covering everything the harness then did — whereas an
-ADK toolset presents each operation as its own tool, so `before_tool_callback`
-fires on `calendar_events_insert` and `calendar_events_delete` separately.
-
-That distinction is the whole point:
-
-    The gateway evaluates every tool call. Approval at initial dispatch is
-    insufficient.
-
-Using the official toolsets satisfies that by construction, and by deleting
-code rather than adding it.
-
-Authentication
---------------
-`ServiceAccount(use_default_credential=True)` uses Application Default
-Credentials, so the same code runs locally under `gcloud auth
-application-default login` and on Cloud Run under the service identity — no
-browser, no client secret in the image.
-
-Scopes are requested explicitly and narrowly. `calendar.events` grants event
-read and write and nothing else; it cannot even list which calendars exist.
+Each API operation is gated separately. Authentication uses Application Default
+Credentials with explicit service scopes.
 """
 
 from __future__ import annotations
@@ -131,13 +103,9 @@ async def build_workspace_app(
     name: str = "workspace_fleet",
     instruction: str | None = None,
 ) -> WorkspaceApp:
-    """Wire official Workspace toolsets behind one Coactra policy gate.
+    """Wire official Workspace toolsets behind one policy gate.
 
-    `tool_filter` is worth using rather than ignoring. `CalendarToolset` alone
-    exposes 38 operations, including ACL changes; handing all of them to a model
-    because they happen to exist is how a fleet acquires powers nobody decided
-    to give it. Naming the operations you want is the cheapest control there is,
-    and it applies before the policy ever runs.
+    Use tool_filter to expose only the operations the app needs, before policy checks.
     """
     unknown = [s for s in services if s not in TOOLSETS]
     if unknown:
@@ -193,21 +161,10 @@ async def build_workspace_app(
 async def check_workspace_service_access(
     services: Sequence[str] = tuple(SCOPES),
 ) -> dict[str, str | None]:
-    """Which Workspace services the current credentials can actually reach.
+    """Return service-to-error mappings; None means no access issue was detected.
 
-    A harness that is not installed reports `available=False` with a reason
-    rather than raising; a Workspace service the credentials cannot reach
-    deserves the same. Without this the failure arrives later as an HTTP 403
-    from Google mid-run, which reads like a bug in this library.
-
-    This asks Google what the token actually carries rather than asking the
-    credentials object what it believes. A first version did the latter:
-    `granted_scopes` is empty for user ADC, so every service came back usable
-    while Gmail was in fact returning 403. A check that reports success when
-    the thing does not work is worse than no check, because it is believed.
-
-    Returns a mapping of service to `None` when usable, or a sentence saying
-    what to do about it.
+    Inspect token scopes because user ADC granted_scopes can be empty. Tokens that
+    cannot be introspected are left to the API's authorization checks.
     """
     if find_spec("googleapiclient") is None:
         return dict.fromkeys(
@@ -286,13 +243,7 @@ async def usable_services(
 
 
 def _instruction(services: Sequence[str]) -> str:
-    """Tell the model what it has, and what a refusal means.
-
-    The last paragraph matters. When policy denies a call, the gate returns a
-    blocked result rather than raising, so the model can explain the refusal. A
-    model that instead retries, or reaches for a different tool that achieves
-    the same effect, converts a clean governance decision into a workaround.
-    """
+    """Describe available services and require the model to respect policy refusals."""
     return (
         f"You complete work in Google Workspace: {', '.join(services)}.\n\n"
         "Use `primary` as the calendar id unless told otherwise. Call tools "

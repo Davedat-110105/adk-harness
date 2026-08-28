@@ -1,16 +1,7 @@
-"""Human judgment, captured once and reused safely.
+"""Match scoped human decisions without model calls.
 
-When policy says a call needs human approval, the human's answer is worth more
-than one decision. This module turns that answer into a scoped, typed precedent
-so the next equivalent call does not interrupt anyone.
-
-The matcher is deliberately deterministic. Hard predicates decide whether a
-precedent is *admissible* at all; ranking only orders the candidates that
-already passed. Similarity never admits a precedent that the predicates
-rejected — that inversion is how these systems start applying a rule about one
-service to every service that merely reads similar.
-
-No model call happens anywhere in this module.
+Hard predicates control admission; specificity only ranks admitted candidates.
+Missing facts, conflicting decisions, and overdue reviews require a human.
 """
 
 from __future__ import annotations

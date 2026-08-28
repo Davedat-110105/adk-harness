@@ -1,11 +1,4 @@
-"""The policy gate.
-
-ADK tool calls and coding-harness dispatch pass through this plugin. Inner
-commands executed by a vendor harness do not; see `harness_agent.py`.
-
-The plugin decides nothing itself. It asks a Coactra `Policy` and translates the
-answer into the vocabulary ADK understands.
-"""
+"""Apply Coactra decisions to ADK tool calls and harness dispatch, not vendor inner commands."""
 
 from __future__ import annotations
 
@@ -49,13 +42,10 @@ class AuditRecord:
 
 
 class CoactraGovernance(BasePlugin):
-    """Gate ADK tool calls on a Coactra policy decision.
+    """Translate policy decisions into ADK callbacks.
 
-    The three outcomes map onto ADK as follows. `allow` returns `None`, which
-    lets the tool run. `deny` returns a dict, which ADK substitutes as the tool's
-    result, so the model sees the refusal and can explain it rather than failing
-    opaquely. `requires_approval` calls ADK's own `request_confirmation`, which
-    interrupts the run until a human answers and then resumes it.
+    Allow returns None; deny and pending confirmation return a result that prevents
+    execution. Human decisions may be reused through scoped precedents.
     """
 
     def __init__(
@@ -165,27 +155,10 @@ class CoactraGovernance(BasePlugin):
         tool_args: dict[str, Any],
         tool_context: Any,
     ) -> dict[str, Any] | None:
-        """Consult precedent before spending a human interruption.
+        """Apply a matching precedent or request human confirmation.
 
-        Returning a dict here is not decoration — it is what stops the tool.
-        `request_confirmation()` only records a request on the event actions
-        (see `ToolContext.request_confirmation`); it does not halt anything. ADK
-        runs the tool whenever `before_tool_callback` returns `None`
-        (`flows/llm_flows/functions.py`, step 3). Asking a human and returning
-        `None` would therefore ask *and* proceed, which is the worst of both:
-        an approval prompt that changes nothing.
-
-        Returning a response also produces the function-response event that
-        ADK's `generate_request_confirmation_event` needs in order to surface
-        the pending confirmation to the client. So the dict is both the brake
-        and the signal.
-
-        This is the whole point of the system. Policy has said a human must
-        decide. If a human already decided this exact question, under
-        conditions that still hold, asking again is noise.
-
-        Precedent removes the repeated question. It never removes the policy
-        gate itself, and it never converts a deny into an allow.
+        Return a dict to stop execution and surface the confirmation event;
+        request_confirmation() alone does not stop the tool. Precedents never override deny.
         """
         action = ACTION_TOOL_CALL
         ambiguity = _ambiguity_type(tool.name)
@@ -201,11 +174,7 @@ class CoactraGovernance(BasePlugin):
         )
         pending = {"tool": tool.name, "action": action, "ambiguity_type": ambiguity, "facts": facts}
 
-        # A human may already have answered. When ADK resumes a run after a
-        # confirmation, it re-invokes the tool with the answered
-        # `ToolConfirmation` attached, which lands us back here. Without this
-        # check the gate would ask the same question again and the run could
-        # never proceed — the approve button would do nothing.
+        # ADK retries with the answered confirmation; do not ask again.
         answered = getattr(tool_context, "tool_confirmation", None)
         if answered is not None and getattr(answered, "confirmed", False):
             self._pending[confirmation_id] = pending
@@ -249,13 +218,10 @@ class CoactraGovernance(BasePlugin):
         review_after: datetime | None = None,
         confirmation_id: str | None = None,
     ) -> Precedent:
-        """Turn a human's answer into a precedent that binds future calls.
+        """Save a trusted human decision with explicit applicability.
 
-        Call this after a human resolves a confirmation. The scope is the
-        caller's to set, not the model's: a casual answer must not silently
-        become a broad policy, so `applicability` is explicit rather than
-        inferred. Pass the confirmation payload's `confirmation_id` when more
-        than one question is pending for this tool; ambiguous answers fail closed.
+        The host sets scope, never the model. Supply confirmation_id when multiple
+        questions are pending for the same tool; ambiguous answers fail closed.
         """
         if confirmation_id is None:
             candidates = [key for key, value in self._pending.items() if value["tool"] == tool_name]
@@ -344,9 +310,7 @@ class CoactraGovernance(BasePlugin):
             if invocation is None:
                 invocation = uuid4().hex
                 tool_context._adk_harness_invocation = invocation
-            # Failure is propagated. In the before callback this prevents the
-            # action; a terminal failure means execution happened but recording
-            # failed, never that the action was rolled back.
+            # Prewrite failure blocks execution; terminal recording failure cannot undo it.
             self.ledger.record(
                 actor=self._principal,
                 agent="adk-harness",
@@ -362,19 +326,9 @@ class CoactraGovernance(BasePlugin):
         tool_context._adk_harness_terminal = terminal
 
     def _resource_for(self, tool: Any, tool_args: Mapping[str, Any]) -> str:
-        """Name the thing a policy is actually deciding about.
+        """Resolve the policy target from cwd, the registered resource, or the tool name.
 
-        A tool that takes `cwd` names its own target, so that wins. But a
-        harness dispatched through ADK's `AgentTool` does not: its arguments are
-        just the instruction text, and the working directory lives on the agent
-        that was wrapped. Without the registered mapping the policy would
-        receive the *tool name* as the resource, and a rule like "must be under
-        /workspace" would reject every dispatch for the wrong reason — a gate
-        that looks like it is working while deciding on the wrong noun.
-
-        `build_fleet` registers `{tool_name: cwd}` for exactly this. Falling
-        back to the tool name is kept only so an unregistered tool still gets a
-        decision rather than a crash.
+        AgentTool arguments omit cwd, so build_fleet registers each harness's directory.
         """
         cwd = tool_args.get("cwd")
         if cwd:
@@ -397,12 +351,7 @@ class CoactraGovernance(BasePlugin):
 
 
 def _ambiguity_type(tool_name: str) -> str:
-    """Name the *kind* of question being asked, not the instance.
-
-    Precedent has to key on something more stable than a tool name and less
-    vague than "similar situation". The kind of judgment being requested is
-    that middle ground.
-    """
+    """Classify the policy question so equivalent requests can share a precedent."""
     return f"approval_required:{tool_name}"
 
 

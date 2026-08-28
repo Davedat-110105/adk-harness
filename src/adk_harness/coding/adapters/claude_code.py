@@ -1,91 +1,8 @@
-"""Claude Code adapter: drive `claude-agent-sdk`'s one-shot `query()`.
+"""Claude Code adapter using one SDK query() generator per run.
 
-Verified against the machine, not memory:
-
-- `claude-agent-sdk==0.2.144`, installed into this repo's `.venv` with
-  `.venv/bin/pip install claude-agent-sdk` (it was not present beforehand;
-  `uv pip install --python .venv/bin/python claude-agent-sdk` was used since
-  `.venv/bin/pip` itself is not installed in this venv).
-- The `claude` CLI binary at `/Users/datta/.local/bin/claude`, version
-  `2.1.241` (`claude --version`). The SDK's own bundled baseline is
-  `2.1.239` (`claude_agent_sdk._cli_version.__cli_version__`) — close enough
-  that nothing here depends on the gap, but recorded in case it matters later.
-- Class names, the `query()` entry point, `ClaudeAgentOptions`, and the
-  message/content-block dataclasses all come from reading the installed
-  source under `.venv/lib/python3.12/site-packages/claude_agent_sdk/`
-  (`types.py`, `query.py`, `client.py`, `_internal/client.py`,
-  `_internal/message_parser.py`, `_internal/query.py`, `_errors.py`) via
-  `Read` and `grep`, not from recollection.
-
-Why `query()` and not `ClaudeSDKClient`
-----------------------------------------
-`run()` is one call in, one stream out — exactly the shape `query()` is built
-for (see its docstring: "stateless", "fire-and-forget style"). `ClaudeSDKClient`
-adds bidirectional, multi-turn session state this adapter has no use for; each
-`run()` call gets its own subprocess via its own `query()` generator, which
-also makes cleanup simple (closing that one generator is enough — see
-`aclose()` below).
-
-Two things about `query()`'s internals shaped `run()`'s control flow:
-
-1. Reading `.venv/lib/python3.12/site-packages/claude_agent_sdk/_internal/client.py`
-   shows `InternalClient.process_query` explicitly `await`s `inner.aclose()`
-   in a `finally`, with a comment noting `async for` does **not** close its
-   iterator when the loop body raises or is cancelled (PEP 533 was deferred).
-   The same trap applies to us: `run()` holds the `query()` generator in a
-   local variable and explicitly `aclose()`s it in a `finally`, rather than
-   trusting a bare `async for` to clean up the subprocess.
-2. Reading `_internal/query.py` shows that after the CLI emits a `result`
-   frame with `is_error: true` and then exits non-zero, `query()` re-raises
-   that as `ResultError` *after* already yielding the `ResultMessage` — i.e.
-   an error run surfaces twice: once as data, once as an exception. Since
-   this adapter already turns an `is_error` `ResultMessage` into a
-   `HarnessTurn(kind="error", ...)`, the follow-up `ResultError`/`ProcessError`
-   would just be a duplicate exit-code footnote left to blow up the caller's
-   `async for` for no new information. `run()` catches `ClaudeSDKError` and
-   only turns it into a *second* error turn when no error turn was already
-   emitted for this run (i.e. the CLI died before ever producing a proper
-   result — a genuinely new fact worth surfacing).
-
-Block-to-kind mapping
-----------------------
-Both `AssistantMessage.content` and `UserMessage.content` can carry any
-`ContentBlock` subtype on the wire (confirmed by reading
-`_internal/message_parser.py`: both the `"user"` and `"assistant"` cases parse
-the same block variants defensively). `run()` therefore maps blocks with one
-shared helper regardless of which message they arrived on:
-
-- `TextBlock`, `ThinkingBlock` -> `kind="text"` (CONTRACT.md: "assistant
-  prose, reasoning summaries, plans").
-- `ToolUseBlock`, `ServerToolUseBlock` -> `kind="tool_call"`, and the block's
-  `id` is remembered so a later `ToolResultBlock` referencing it can carry
-  `tool_name` too (a bare `tool_use_id` on its own does not name the tool).
-- `ToolResultBlock`, `ServerToolResultBlock` -> `kind="tool_result"`.
-- `AssistantMessage.error` (a per-turn generation failure distinct from
-  `ResultMessage.is_error`) -> `kind="error"`.
-- `ResultMessage` -> `kind="usage"` always (duration/cost/turn count), plus a
-  `kind="error"` turn first when `is_error` is set.
-- `SystemMessage` and all of its subclasses (`Task*Message`,
-  `HookEventMessage`, ...), plain-string `UserMessage` echoes of the prompt,
-  and anything else not listed above are dropped — CONTRACT.md is explicit
-  that dropping is not lossy, since `raw` stays available on turns that are
-  yielded.
-
-Session continuity
--------------------
-`ClaudeAgentOptions.resume` (read from `types.py`) resumes a prior session by
-id, which is exactly what `Harness.run`'s `session_id` parameter is for. It is
-passed straight through; when `session_id` is `None` this equals
-`ClaudeAgentOptions`'s own default (start fresh).
-
-Permissions
------------
-CONTRACT.md rule 1: an adapter never decides whether an action is permitted.
-`permission_mode` therefore defaults to `None` here too, which is
-`ClaudeAgentOptions`'s own default ("default" — the CLI's standard prompting
-behavior for dangerous operations). This adapter does not upgrade that to
-`"bypassPermissions"` or `"acceptEdits"` on its own; a caller that wants a
-different mode passes it explicitly to `ClaudeCodeHarness.__init__`.
+Streams text, tool activity, usage, and errors; session_id maps to resume.
+Vendor permission defaults are preserved. Explicit generator closure releases
+the subprocess, and repeated SDK errors are emitted only once.
 """
 
 from __future__ import annotations
@@ -102,11 +19,7 @@ __all__ = ["ClaudeCodeHarness"]
 
 
 def _stringify_tool_result(content: str | list[dict[str, Any]] | None) -> str | None:
-    """Flatten a `ToolResultBlock.content` payload to text for `HarnessTurn.text`.
-
-    The full structure survives regardless, in `raw`; this is just the best
-    plain-text rendering for callers that only look at `text`.
-    """
+    """Render tool content as text; the original structure remains in raw."""
     if content is None:
         return None
     if isinstance(content, str):
@@ -141,13 +54,7 @@ class ClaudeCodeHarness:
         self.permission_mode = permission_mode
         self.system_prompt = system_prompt
         self.spec = HarnessSpec(id="claude_code", version="unknown", available=False)
-        # `query()` async generators currently in flight, so `aclose()` has
-        # something to close. A generator removes itself when it finishes on
-        # its own; `aclose()` drains whatever is left. Typed `Any`, not
-        # `AsyncIterator`, because `query()`'s declared return type is the
-        # narrower `AsyncIterator[Message]` protocol (no `.aclose()`) even
-        # though it is, in fact, an async generator (confirmed by reading
-        # `query.py`'s source, not just its signature).
+        # Track active query generators for shutdown.
         self._active_queries: list[Any] = []
 
     async def discover(self) -> HarnessSpec:
@@ -276,14 +183,9 @@ class ClaudeCodeHarness:
                         tool_name=tool_names.get(block.tool_use_id),
                         raw=block,
                     )
-                # Any other block type (a future addition to the wire format)
-                # is dropped rather than force-fitted onto a kind it doesn't
-                # match — CONTRACT.md is explicit that this is the right call.
+                # Ignore unknown block types.
 
-        # `query()`'s declared return type is `AsyncIterator[Message]` (no
-        # `.aclose()` in that protocol) even though it is, in fact, an async
-        # generator — see the module docstring. `Any` here is what lets the
-        # `agen.aclose()` calls below type-check against what it actually is.
+        # The SDK annotation omits aclose(), but query() returns an async generator.
         agen: Any = query(prompt=prompt, options=options)
         self._active_queries.append(agen)
         saw_error_turn = False
@@ -315,15 +217,9 @@ class ClaudeCodeHarness:
                             raw=message,
                         )
                     yield HarnessTurn(kind="usage", text=_usage_text(message), raw=message)
-                # SystemMessage and its Task*/HookEvent subclasses are session
-                # bookkeeping (init banners, task-progress heartbeats, hook
-                # lifecycle events) — dropped per CONTRACT.md.
+                # Ignore SDK bookkeeping messages.
         except ClaudeSDKError as exc:
-            # `query()` re-raises after an `is_error` result frame (see the
-            # module docstring). If we already turned that result into an
-            # error turn, this is the same failure a second time — swallow
-            # it. If not, the CLI failed before ever producing a proper
-            # result (e.g. spawn failure), and this is the only signal we get.
+            # Avoid reporting an SDK error twice after an error result frame.
             if not saw_error_turn:
                 yield HarnessTurn(kind="error", text=str(exc), raw=exc)
         finally:

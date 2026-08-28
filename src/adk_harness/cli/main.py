@@ -34,8 +34,6 @@ def _run(*args: str) -> tuple[int, str]:
         )
     except (OSError, subprocess.TimeoutExpired) as exc:
         return 1, str(exc)
-    # stdout when it worked, stderr when it did not — the previous one-liner
-    # chained `and` inside `or` and had to be read twice to be believed.
     output = done.stdout if done.returncode == 0 else done.stderr
     return done.returncode, (output or "").strip()
 
