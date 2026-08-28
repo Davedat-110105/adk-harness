@@ -1,0 +1,5 @@
+{
+  "name": "adk-harness",
+  "version": "0.1.0",
+  "description": "Govern Google Workspace from inside Antigravity. Named reads flow; writes are held for trusted host approval. Sending mail and changing sharing are refused. The model cannot authorize its own actions."
+}

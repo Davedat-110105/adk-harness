@@ -1,5 +1,0 @@
-{
-  "name": "adk-harness",
-  "version": "0.1.0",
-  "description": "Govern Google Workspace from inside Antigravity. Calendar and Gmail operations become tools, each judged individually: reads flow, anything others will see asks a person, sending mail and changing sharing are refused. Approve once and you are not asked again."
-}

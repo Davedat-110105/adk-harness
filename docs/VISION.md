@@ -12,12 +12,12 @@ hard part of phase 3 is a phase 1 decision. Written 2026-08-27.
 ## Phase 1 — Antigravity as a local orchestrator
 
 **What exists:** an MCP server (`src/adk_harness/mcp_server.py`), packaged as
-an Antigravity plugin (`plugin/` — `plugin.json` + `mcp_config.json` +
+an Antigravity plugin (`plugins/antigravity/` — `plugin.json` + `mcp_config.json` +
 `skills/` + `rules/`, installed to `~/.gemini/config/plugins`), exposing
 governed Workspace operations — and, behind `ADK_HARNESSES=1`, each installed
 coding harness — as tools. Verified by speaking MCP to it as a real client:
 tools listed, deny path fired, audit recorded. See
-[docs/PROOF.md](PROOF.md) §4 for a captured run and `plugin/README.md` for
+[docs/PROOF.md](PROOF.md) §4 for a captured run and `plugins/antigravity/README.md` for
 install steps.
 
 **The IDE question is answered, and the answer is definitive.** Antigravity
@@ -38,7 +38,7 @@ So phase 1 has two shapes, and they are not equivalent:
 
 | Shape | Mechanism | Status |
 |---|---|---|
-| IDE delegates to external harnesses | MCP tools, packaged as the Antigravity plugin | working today — see `plugin/` |
+| IDE delegates to external harnesses | MCP tools, packaged as the Antigravity plugin | working today — see `plugins/antigravity/` |
 | IDE orchestrates its own models | would need `languageModelSystem`, restricted to one Microsoft extension in `product.json` | answered: not possible for a third party |
 | SDK agent orchestrates subagents on different models | `google-antigravity`'s `LocalAgentConfig.models` + `.subagents` | supported by the SDK, not yet built; independent of the IDE question above |
 

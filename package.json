@@ -1,0 +1,20 @@
+{
+  "name": "adk-harness",
+  "version": "0.1.0",
+  "description": "Global launcher for the adk-harness Python package",
+  "license": "MIT",
+  "bin": {
+    "adk-harness": "bin/adk-harness.js"
+  },
+  "files": [
+    "bin",
+    "plugins",
+    "src/adk_harness/**/*.py",
+    "pyproject.toml",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18"
+  }
+}

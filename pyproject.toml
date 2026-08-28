@@ -11,19 +11,18 @@ requires-python = ">=3.12"
 license = { text = "MIT" }
 keywords = ["adk", "gemini", "agents", "claude-code", "codex", "opencode", "antigravity"]
 dependencies = [
-    "google-adk[db]>=2.7,<3",
+    "google-adk[db,mcp]>=2.7,<3",
     # Bounded deliberately, and widened only after testing. coactra is pre-1.0
     # alpha and ships breaking changes without shims — 0.6.0 renamed
     # coactra.agent.adapters to coactra.agent.backends — so an unbounded pin
     # means a coactra release could break `pip install adk-harness` without a
-    # line changing here. The floor is 0.6.0 because that is what has been
-    # verified: offline suite, lint, types, and the live Vertex tests all pass
-    # against it. Widen the ceiling the same way, not in anticipation.
+    # line changing here. The floor is 0.7.0 for its canonical tool.call action.
+    # Widen the ceiling after testing, not in anticipation.
     "coactra>=0.7.0,<0.8",
 ]
 
 [project.scripts]
-adk-harness = "adk_harness.setup_cli:main"
+adk-harness = "adk_harness.cli.main:main"
 
 [project.optional-dependencies]
 claude-code = ["claude-agent-sdk>=0.2,<1"]
@@ -45,14 +44,25 @@ a2a = ["google-adk[a2a]>=2.7,<3"]
 # in google-adk's own `all` extra rather than its `gcp` one. Depending on the
 # exporter directly keeps the Cloud Run image small.
 tracing = ["opentelemetry-exporter-gcp-trace>=1.9,<2"]
-all = ["claude-agent-sdk>=0.2,<1", "httpx>=0.27", "google-antigravity>=0.1.14,<0.2"]
+# All runtime integrations; developer tooling remains a separate opt-in.
+all = ["adk-harness[claude-code,opencode,antigravity,google-workspace,ledger,a2a,tracing]"]
 dev = ["pytest>=8", "pytest-asyncio>=0.23", "ruff>=0.8", "pyright>=1.1"]
+
+[tool.hatch.build]
+exclude = ["**/.env", "**/.env.*", "**/.adk/**", "**/*.db", "**/*.db-*", "**/__pycache__/**"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "/src", "/plugins", "/tests", "/examples", "/docs", "/bin",
+    "/.agents/plugins/marketplace.json", "/.npmignore", "/package.json",
+    "/README.md", "/LICENSE", "/pyproject.toml",
+]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/adk_harness"]
 # The plugin ships inside the package so `adk-harness setup` can install it
 # without the user having cloned the repository.
-force-include = { "plugin" = "adk_harness/plugin" }
+force-include = { "plugins/antigravity" = "adk_harness/plugins/antigravity" }
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
@@ -88,10 +98,10 @@ pythonVersion = "3.12"
 # The module docstring carries a markdown table mapping vendor event tags onto
 # HarnessTurn kinds. Wrapping the rows breaks the table, and the table is the
 # most useful thing in the file.
-"src/adk_harness/adapters/codex.py" = ["E501"]
+"src/adk_harness/coding/adapters/codex.py" = ["E501"]
 # These replay real vendor payloads. Reflowing them makes the fixture stop
 # looking like what the vendor actually sends, which is the point of it.
-"tests/test_adapter_codex.py" = ["E501"]
-"tests/test_adapter_claude_code.py" = ["E501"]
+"tests/coding/adapters/test_codex.py" = ["E501"]
+"tests/coding/adapters/test_claude_code.py" = ["E501"]
 # Same reason as codex.py: the module docstring carries the chunk-to-kind table.
-"src/adk_harness/adapters/antigravity.py" = ["E501"]
+"src/adk_harness/coding/adapters/antigravity.py" = ["E501"]

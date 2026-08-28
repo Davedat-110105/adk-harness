@@ -1,0 +1,20 @@
+{
+  "name": "adk-harness",
+  "interface": {
+    "displayName": "ADK Harness"
+  },
+  "plugins": [
+    {
+      "name": "adk-harness",
+      "source": {
+        "source": "local",
+        "path": "./plugins/adk-harness"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Developer Tools"
+    }
+  ]
+}

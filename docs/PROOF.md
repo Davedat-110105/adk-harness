@@ -15,7 +15,7 @@ This is the claim the project rests on: **a human answers a governance question
 once, and stops being asked.** Not "the agent asks less often" — stops.
 
 ```bash
-GOOGLE_CLOUD_PROJECT=your-project python examples/capture_precedent_loop.py
+GOOGLE_CLOUD_PROJECT=your-project python examples/scripts/approval_reuse_demo.py
 ```
 
 Captured 2026-08-25, `gemini-3.5-flash`, Vertex location `global`:
@@ -103,7 +103,7 @@ The strongest evidence here, because the action is externally visible: an event
 on a real Google Calendar, created only after a person approved it.
 
 ```bash
-GOOGLE_CLOUD_PROJECT=your-project python examples/capture_workspace_governance.py
+GOOGLE_CLOUD_PROJECT=your-project python examples/scripts/workspace_policy_demo.py
 ```
 
 Captured 2026-08-27. Tools are ADK's official `CalendarToolset`, filtered to two
@@ -156,7 +156,7 @@ it is a different tool. A dispatch-level gate cannot express that distinction.
 A different path from §3: no ADK `Runner`, no Gemini orchestrator. A real MCP
 client speaks directly to `src/adk_harness/mcp_server.py`, the same gate
 reached a different way — this is also how the Antigravity plugin in
-`plugin/` reaches it (see `plugin/README.md`).
+`plugins/antigravity/` reaches it (see `plugins/antigravity/README.md`).
 
 Observed, speaking MCP to the running server as a real client:
 
@@ -202,7 +202,7 @@ opencode  unknown  unavailable (OpenCode server 'http://127.0.0.1:4096'
 ## 6. Running it on a real repository
 
 ```bash
-GOOGLE_CLOUD_PROJECT=your-project python examples/dogfood.py --cwd . "your task"
+GOOGLE_CLOUD_PROJECT=your-project python examples/scripts/run_fleet_on_repository.py --cwd . "your task"
 ```
 
 This is not the demo — it registers the real harnesses and lets them work in a
@@ -219,7 +219,7 @@ Stated here rather than left to be discovered:
   — `calendar_events_insert` is its own decision. Coding harnesses are gated at
   dispatch only: their inner file edits and shell commands run in their own
   process, never return through ADK, and are streamed and audited rather than
-  approved. See `src/adk_harness/agent.py` and `src/adk_harness/workspace.py`.
+  approved. See `src/adk_harness/harness_agent.py` and `src/adk_harness/workspace.py`.
 - **The Cloud Run demo registers a stub harness**, because a container has
   neither `codex` nor `claude` installed. The stub says so in its own output.
   The transcript in §1 uses a stub for the same reason: it keeps the recording

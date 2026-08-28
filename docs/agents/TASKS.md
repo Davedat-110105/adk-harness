@@ -1,4 +1,4 @@
-# Open tasks
+# Task history and current work
 
 Each task is written to be done without reading the others. Read
 [CONTRACT.md](CONTRACT.md) and [OWNERSHIP.md](OWNERSHIP.md) first.
@@ -22,7 +22,7 @@ once the code existed; the code and its tests are the specification now.
 
 Task 5 (opencode) and Task 6 (a persistent precedent store) also landed.
 
-A seventh, the hand-rolled Google Calendar harness, was written and then
+An earlier hand-rolled Google Calendar harness was written and then
 **deleted**. ADK ships official Workspace toolsets, so wrapping Calendar in the
 `Harness` protocol reimplemented them and gated at dispatch instead of per
 operation. See `src/adk_harness/workspace.py`. It is recorded here because
@@ -31,14 +31,15 @@ than silence.
 
 
 Both adapters, `HarnessAgent`, and `build_fleet` are landed, tested, and
-deployed. See [OWNERSHIP.md](OWNERSHIP.md).
+deployed. The later Task 7 is the Antigravity adapter; it is unrelated to the
+removed Calendar experiment. See [OWNERSHIP.md](OWNERSHIP.md).
 
 ---
 
 ## Task 5 — the opencode adapter
 
-**Owner:** unclaimed — claim it in `OWNERSHIP.md` before starting
-**Files you write:** `src/adk_harness/adapters/opencode.py`,
+**Status:** completed — the original specification below is historical
+**Implementation files:** `src/adk_harness/adapters/opencode.py`,
 `tests/test_adapter_opencode.py`
 
 Two adapters can accidentally agree with each other. A third that is
@@ -64,8 +65,8 @@ it to completion.
 
 ## Task 6 — a precedent store that survives a restart
 
-**Owner:** unclaimed — claim it in `OWNERSHIP.md` before starting
-**Files you write:** `src/adk_harness/stores.py`, `tests/test_stores.py`
+**Status:** completed — the original specification below is historical
+**Implementation files:** `src/adk_harness/governance/stores.py`, `tests/test_stores.py`
 
 This one matters more than it looks. `PrecedentStore` currently holds
 precedents in memory. The demo runs on Cloud Run with `--min-instances=0`, so

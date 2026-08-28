@@ -40,5 +40,5 @@ The gate is a Coactra `Policy`. When policy says a human must decide, the gate
 first checks whether a human already decided this exact question under
 conditions that still hold. If so, it applies that precedent instead of
 interrupting. That precedent loop is the centerpiece of the project, and it
-lives in `src/adk_harness/precedent.py`. Adapters do not participate in it and
+lives in `src/adk_harness/governance/precedents.py`. Adapters do not participate in it and
 must not try to.

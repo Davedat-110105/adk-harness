@@ -1,16 +1,27 @@
 # Where this can go: services, architecture, and what to build next
 
-Written 2026-08-25, six days before the submission deadline (2026-08-31 17:00
-PDT). Ordered by what makes the submission more concrete without making it less
-flexible — because those two pull against each other, and most of the bad
-choices available here trade one for the other without saying so.
+## Current implementation (audit remediation, 2026-08-27)
 
-Everything below is either **verified**, **plausible-but-unverified**, or
-**explicitly not planned**. Nothing is described as done unless it is.
+- Four coding harness adapters exist. Dispatch is governed; their inner vendor
+  operations are not individually mediated by this library.
+- `WorkspaceApp` uses official Calendar, Gmail, Docs and Sheets toolsets. Each
+  exposed operation is gated; credentials and tool filters determine availability.
+- SQLite precedent persistence, optional Firestore action records and local
+  content screening exist. Local screening is not Google Cloud Model Armor.
+- MCP cannot create approvals. Trusted host code owns that authority, and the
+  server does not automatically load the old model-writable precedent database.
+- Durable workflow resumption, per-user OAuth, managed Model Armor and a full
+  control plane remain outside this implementation. No deployment or live API
+  validation was performed in this remediation pass.
+
+The notes below collect earlier planning and later updates from August 25–27.
+Their time estimates, deployment health, test counts, and statements that
+Workspace or persistence are absent are historical, superseded by the summary
+above. They are retained as decision history, not an active task list.
 
 ---
 
-## Where the project actually stands
+## Historical snapshot (2026-08-25)
 
 Verified working, on real infrastructure, as of this writing:
 
@@ -72,7 +83,7 @@ deforming the library to fit a demo.
 
 ### 2. State plainly, in the README, what the gate does not cover
 
-Already written into `agent.py`'s docstring and the README, and worth keeping
+Already written into `harness_agent.py`'s docstring and the README, and worth keeping
 sharp: **dispatch is gated; a harness's own inner tool calls are observed, not
 gated.** They run in the harness's process and never return through ADK.
 
@@ -237,7 +248,7 @@ governance half is done and whose *large* integration half is not started.
 | OpenTelemetry spans | `--trace_to_cloud` wired | wired, not verified end to end |
 | Justified delegation among agents | `AgentTool` fan-out | 4 harnesses dispatch through one gate |
 
-## What does not exist at all
+## Historical gap list (superseded by current implementation)
 
 Gmail / Calendar / Drive / Docs integration · per-user OAuth · Firestore
 workflow state and action ledger · Pub/Sub · Model Armor · the 9-state workflow

@@ -33,15 +33,16 @@ ENV GOOGLE_GENAI_USE_ENTERPRISE=true \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1
 
-COPY pyproject.toml README.md ./
+COPY pyproject.toml README.md LICENSE ./
 COPY src/ ./src/
-RUN pip install --no-cache-dir ".[tracing]"
+COPY plugins/antigravity/ ./plugins/antigravity/
+RUN pip install --no-cache-dir ".[tracing,google-workspace,ledger]"
 
 # ADK expects an agents directory holding one folder per agent. Both are
 # served by one container: /fleet governs coding harnesses, /workspace
 # governs Google Calendar. Same gate, same audit trail.
-COPY --chown=appuser:appuser examples/fleet/ /app/agents/fleet/
-COPY --chown=appuser:appuser examples/workspace/ /app/agents/workspace/
+COPY --chown=appuser:appuser examples/agents/fleet/ /app/agents/fleet/
+COPY --chown=appuser:appuser examples/agents/workspace/ /app/agents/workspace/
 
 USER appuser
 

@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "adk-harness": {
+      "command": "python",
+      "args": [
+        "-m",
+        "adk_harness.mcp.server"
+      ],
+      "env": {
+        "ADK_HARNESS_WORKSPACE": "${workspaceFolder}",
+        "ADK_SERVICES": "calendar,gmail",
+        "GOOGLE_CLOUD_PROJECT": "${GOOGLE_CLOUD_PROJECT}"
+      }
+    }
+  }
+}

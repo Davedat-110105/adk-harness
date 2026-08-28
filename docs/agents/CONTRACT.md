@@ -1,6 +1,6 @@
 # The contract
 
-`src/adk_harness/protocol.py` is frozen. Everything else in the SDK is written
+`src/adk_harness/coding/protocol.py` is frozen. Everything else in the SDK is written
 against it, so changing it breaks every adapter at once. If you believe it must
 change, say so and stop; do not change it.
 
@@ -48,7 +48,7 @@ failure this SDK exists to prevent.
 
 **2. Import the vendor SDK inside `discover()`, never at module level.**
 
-`from adk_harness.adapters.codex import CodexHarness` must succeed on a machine
+`from adk_harness.coding.adapters.codex import CodexHarness` must succeed on a machine
 where Codex is not installed. That means no vendor import at the top of the
 file. Import inside `discover()`, catch `ImportError` and `FileNotFoundError`,
 and return `HarnessSpec(available=False, detail=...)`.

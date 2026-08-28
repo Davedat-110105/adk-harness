@@ -1,322 +1,72 @@
 # adk-harness
 
-Turn any coding-agent harness into a governed Google ADK agent.
-
-Claude Code, Codex, opencode, and Google Antigravity have nothing in common —
-a Python SDK over a CLI, a CLI subprocess, an HTTP server, and a Python SDK over
-a bundled compiled runtime. `adk-harness` puts all four behind a single protocol,
-presents each as a Google ADK agent, and routes a Gemini orchestrator across them
-while one policy gate sees every tool call before it runs.
-
-It is a library. There is no service to run and no web app to deploy — you
-`pip install` it and import it.
-
-```python
-import asyncio
-
-from adk_harness import HarnessRegistry, build_fleet
-from adk_harness.adapters import ClaudeCodeHarness, CodexHarness
-from coactra import Policy, Scope
-from google.adk.runners import Runner
-from google.adk.sessions import InMemorySessionService
-from google.genai import types
-
-
-async def main() -> None:
-    fleet = await build_fleet(
-        registry=HarnessRegistry([ClaudeCodeHarness(), CodexHarness()]),
-        policy=Policy.default_deny(),
-        scope=Scope(tenant_id="acme", namespace="fleet"),
-        cwd="./api",
-    )
-    print("available:", fleet.available_ids)
-
-    session_service = InMemorySessionService()
-    runner = Runner(app=fleet.app, session_service=session_service)
-    await session_service.create_session(
-        app_name=fleet.app.name, user_id="u", session_id="s"
-    )
-    message = types.Content(
-        role="user", parts=[types.Part(text="Fix the failing tests in ./api")]
-    )
-    async for event in runner.run_async(
-        user_id="u", session_id="s", new_message=message
-    ):
-        if event.content and event.content.parts:
-            for part in event.content.parts:
-                if part.text:
-                    print(part.text)
-
-    for record in fleet.governance.audit:
-        print(record.outcome, record.tool_name, record.reason)
-
-
-asyncio.run(main())
-```
-
-A harness you have not installed reports `available=False` and is simply left
-out of the fleet — nothing raises.
-
-## Why
-
-Teams already run several coding agents. Each one authenticates differently,
-logs differently, and decides for itself what it is allowed to touch. There is no
-single place to say "this fleet may edit source but must ask a human before
-touching production config" and have every agent obey it.
-
-`adk-harness` makes that place exist. Policy is evaluated once, in one plugin,
-before any harness acts — regardless of which vendor is doing the work.
-
-> **Want to see it work without running it?** [docs/PROOF.md](docs/PROOF.md)
-> has captured output from real runs — the precedent loop against live Gemini,
-> and all three governance outcomes against a deployed Cloud Run service.
-
-## The precedent loop
-
-A policy that says "a human must decide" is correct and expensive. Ask a person
-the same question every morning and they stop reading the question — they just
-click approve. At that point the approval prompt has become a formality, which
-is worse than not having one, because it looks like oversight while providing
-none.
-
-So when policy says a human must decide, the gate first asks whether a human
-*already* decided this, under conditions that still hold:
-
-```
-policy says requires_approval
-   └─ does a precedent admit these facts?
-        ├─ exactly one, still valid  → apply it, no interruption
-        ├─ none                      → ask the human, then remember the answer
-        ├─ several that disagree     → ask; do not guess
-        └─ one, past its review date → ask; a stale answer is not an answer
-```
-
-Admission is by hard predicate, never by similarity. Every `Applicability` on a
-precedent must hold against the facts of the call, and **a missing fact is never
-a pass** — if the precedent constrains `path` and the call has no `path`, it does
-not apply. Similarity only ranks candidates that were already admitted, so no
-amount of "this looks close enough" can let one in. There is no model call
-anywhere in `precedent.py`.
-
-Two properties are pinned by tests because everything rests on them:
-
-- **Precedent never overrides a `deny`.** It only removes a repeated question,
-  never the gate itself.
-- **A precedent's scope is set by the human, not inferred.** `remember()` takes
-  `applicability` explicitly, so a casual "yes, that's fine" cannot silently
-  become a broad standing policy.
-
-```python
-# The human answered once. Their answer had a scope.
-fleet.governance.remember(
-    tool_name="run_codex",
-    precedent_id="pr-2026-08-25-tests",
-    applicability=[Applicability("cwd", "startswith", "/work/repo/tests")],
-    decision={"approve": True},
-    rationale="Test files are safe to edit without review.",
-    confirmed_by="dave",
-)
-```
-
-Tomorrow the same question is not asked. A different question still is.
-
-## Architecture
-
-```mermaid
-flowchart TB
-    caller["Caller"]
-
-    subgraph adk["Google ADK Runner"]
-        direction TB
-        orch["Gemini 3.5 Flash<br/>orchestrator — routes by capability"]
-        gate{"CoactraGovernance<br/>before_tool_callback"}
-        pause["request_confirmation<br/>human answers, ADK resumes"]
-        agents["HarnessAgent<br/>one per available harness"]
-    end
-
-    subgraph harnesses["Harnesses — four integration shapes"]
-        direction LR
-        hc["claude-code<br/><i>Python SDK</i>"]
-        hx["codex<br/><i>CLI subprocess</i>"]
-        ho["opencode<br/><i>HTTP + OpenAPI</i>"]
-        ha["antigravity<br/><i>Python SDK + bundled runtime</i>"]
-    end
-
-    subgraph gcp["Google Cloud"]
-        direction LR
-        vertex["Vertex AI<br/>location: global"]
-        engine["Agent Engine<br/>Sessions + Memory Bank"]
-        run["Cloud Run<br/>hosted demo"]
-    end
-
-    caller --> orch
-    orch -->|"every tool call"| gate
-    gate -->|"allow"| agents
-    gate -->|"deny — reason returned as the tool result"| orch
-    gate -->|"requires_approval"| pause
-    pause --> agents
-
-    agents --> hc & hx & ho & ha
-
-    orch -.->|"model calls"| vertex
-    adk -.->|"state that outlives the process"| engine
-    adk -.-> run
-
-    classDef gateStyle fill:#fde68a,stroke:#b45309,stroke-width:2px
-    class gate gateStyle
-```
-
-Every tool call from every harness passes `CoactraGovernance.before_tool_callback`
-before it executes. Because ADK's `AgentTool` defaults to `include_plugins=True`,
-that stays true whether a harness is used as a sub-agent or as a tool.
-
-## What is where
-
-| Concern | Where it lives |
-|---|---|
-| Registry | `HarnessRegistry` — discovery, versioning, capability lookup |
-| Runtime | Each harness is an ADK `BaseAgent`; sessions via ADK or Vertex AI Agent Engine |
-| Learned decisions | `PrecedentStore` — hard-predicate admission, no model call |
-| Identity | `coactra.Scope` on every policy request |
-| Gateway | One orchestrator, one plugin, one policy, one audit trail |
-| Enforcement | The plugin allows, pauses, or denies before a harness is dispatched |
-| Observability | ADK OpenTelemetry output plus a per-decision policy audit trail |
-
-### What the gate does and does not cover
-
-Dispatch is gated: whether *this harness* may work in *this directory* on *this
-task* is a policy decision, and `governance.py` keys the policy resource on
-`cwd` for that reason.
-
-Two paths, two levels of enforcement. Stating this precisely matters, because
-the answer differs and overclaiming either way would be wrong.
-
-**Google Workspace, via ADK toolsets — every operation is gated.** Each API
-operation is its own ADK tool, so `calendar_events_insert` is a separate policy
-decision from `calendar_events_list`, and `calendar_acl_update` can be refused
-outright while both of those are allowed.
-
-**Coding harnesses, via the `Harness` protocol — dispatch is gated, inner calls
-are observed.** Claude Code, Codex, opencode and Antigravity run in their own
-processes; the file edits and shell commands they make never return through ADK.
-`HarnessAgent` surfaces them as events so they land in the transcript, but it
-does not pretend to have approved them. Per-call enforcement there requires the
-vendor's own permission hook.
+Governed Google ADK agents backed by coding harnesses. Fleet dispatches pass a
+shared policy gate; inner file and shell calls inside a vendor process are
+observed, not re-gated by ADK.
 
 ## Install
 
-```bash
-pip install "adk-harness[all]"
-```
-
-Adapters are optional. The base install pulls only ADK and Coactra; a harness you
-have not installed reports `available=False` instead of failing an import.
+The package is not published to npm or PyPI yet. The easiest install is:
 
 ```bash
-pip install adk-harness                  # protocol, registry, governance
-pip install "adk-harness[claude-code]"   # + claude-agent-sdk
-pip install "adk-harness[opencode]"      # + httpx for the opencode server
-pip install "adk-harness[antigravity]"   # + google-antigravity
+npm install -g github:Davedat-110105/adk-harness
+adk-harness --help
+adk-harness doctor                 # optional local checks
 ```
 
-The Antigravity SDK ships its `localharness` runtime inside a platform wheel, so
-install it from PyPI — a source checkout imports but has nothing to run, and the
-adapter reports `available=False` saying exactly that.
-
-Codex needs no extra — it is driven as a subprocess, so install the `codex` CLI
-yourself and `adk-harness` will discover it.
-
-## As an MCP server
-
-`python -m adk_harness.mcp_server` exposes governed Google Workspace
-operations — and, behind `ADK_HARNESSES=1`, the coding harnesses above — as
-MCP tools, with no ADK `Runner` or orchestrator model required. This is also
-how the library reaches Google Antigravity: as a plugin (`plugin/`) installed
-to `~/.gemini/config/plugins`. See [plugin/README.md](plugin/README.md) for
-install steps and configuration, and [docs/PROOF.md](docs/PROOF.md) §4 for a
-captured MCP run.
-
-## Spin-up
-
-Requires Python 3.12+, a Google Cloud project with billing, and the `gcloud` CLI.
+This needs Git, npm, and [uv](https://docs.astral.sh/uv/getting-started/installation/).
+uv downloads Python 3.12 if needed; the first launch installs the Python dependencies.
+The npm launcher does not install the library into your own Python environment.
+For Python code, use Python 3.12+ and install the library directly:
 
 ```bash
-gcloud auth application-default login
-gcloud config set project YOUR_PROJECT_ID
-gcloud auth application-default set-quota-project YOUR_PROJECT_ID
-gcloud services enable aiplatform.googleapis.com run.googleapis.com
+python -m pip install 'adk-harness @ git+https://github.com/Davedat-110105/adk-harness.git'
+# Alternative standalone CLI (no npm):
+uv tool install --python 3.12 'adk-harness[google-workspace] @ git+https://github.com/Davedat-110105/adk-harness.git'
 ```
+
+## First fleet
+
+Follow the runnable Python example in [Getting started](docs/getting-started.md).
+It creates a disposable sandbox and uses a read-only prompt. Vertex credentials
+are required for the Gemini orchestrator (`gcloud auth application-default
+login`, then set `GOOGLE_CLOUD_PROJECT` and `GOOGLE_CLOUD_LOCATION=global`).
+
+## Governance
+
+Allowed actions run. Held actions have run nothing and require a human answer.
+Blocked actions stop with a reason. A model cannot self-approve in chat; only a
+trusted host API may record a precedent, scoped to the required principal,
+tenant/namespace, and working directory bindings.
+
+Workspace API operations are individually gated. Coding harness dispatch is
+gated at the fleet boundary; vendor inner actions need the vendor's permission
+hook for per-action enforcement.
+
+## Examples and docs
+
+- [Getting started](docs/getting-started.md)
+- [Architecture and migration](docs/architecture.md)
+- [Adapter cookbook](docs/adapters.md)
+- [Examples](examples/README.md)
+- [Captured proof](docs/PROOF.md) (historical runs; not a live-test claim)
+
+## Codex plugin
 
 ```bash
-export GOOGLE_GENAI_USE_ENTERPRISE=true   # GOOGLE_GENAI_USE_VERTEXAI still works but is deprecated
-export GOOGLE_CLOUD_PROJECT=YOUR_PROJECT_ID
-export GOOGLE_CLOUD_LOCATION=global
+codex plugin marketplace add https://github.com/Davedat-110105/adk-harness --ref main
+codex plugin add adk-harness@adk-harness
 ```
 
-```bash
-pip install -e ".[dev,all]"
-python -m pytest -q
+The plugin uses Git through `uvx` and the `google-workspace` extra. See
+[plugins/adk-harness/README.md](plugins/adk-harness/README.md) for setup.
+
+## Layout
+
+```text
+src/adk_harness/{coding,governance,workspace,mcp,cli}
+examples/{agents,scripts}
+plugins/{adk-harness,antigravity}
 ```
 
-### The `global` location is not optional
-
-`gemini-3.5-flash` resolves **only** on the `global` Vertex location. It returns
-HTTP 404 in `us-central1`, while `gemini-2.5-flash` works in both — so getting
-this wrong fails late rather than immediately. Keep `GOOGLE_CLOUD_LOCATION=global`
-even when the Cloud Run service itself is deployed to a region.
-
-### Deploy the example fleet
-
-```bash
-adk deploy cloud_run --project=YOUR_PROJECT_ID --region=us-central1 --with_ui ./examples/fleet
-```
-
-`--with_ui` serves ADK's own dev UI, so the deployment doubles as the demo
-surface. The library is the deliverable; the deployment is evidence it runs on
-Google Cloud.
-
-## Writing an adapter
-
-Implement one protocol. `src/adk_harness/protocol.py` is the whole contract.
-
-```python
-class Harness(Protocol):
-    spec: HarnessSpec
-    async def discover(self) -> HarnessSpec: ...
-    def run(self, prompt: str, *, cwd: str, session_id: str | None = None) -> AsyncIterator[HarnessTurn]: ...
-    async def aclose(self) -> None: ...
-```
-
-Five rules, stated in full in [docs/agents/CONTRACT.md](docs/agents/CONTRACT.md):
-
-1. An adapter never decides whether an action is permitted. It streams turns; the
-   governance plugin decides.
-2. Import your vendor SDK inside `discover()`, never at module import time, so a
-   missing harness degrades to `available=False`.
-3. `discover()` must not raise. A missing or broken harness reports
-   `available=False` with the reason in `detail`.
-4. `HarnessTurn.raw` is opaque. The core never branches on vendor payload shape.
-5. `run()` streams. No adapter buffers a whole session.
-
-## Status and roadmap
-
-| Harness | Shape | State |
-|---|---|---|
-| Codex | CLI subprocess | Implemented |
-| Claude Code | Python SDK | Implemented |
-| Antigravity | Python SDK + bundled runtime | Implemented |
-| opencode | HTTP + OpenAPI | Implemented |
-| Hermes Agent | — | Not planned for v1 |
-| DeepSeek Harness | — | Not planned for v1 |
-
-Hermes Agent and DeepSeek Harness are general agent runtimes rather than
-coding-first agents, and DeepSeek Harness is a v0.1 developer preview that
-guarantees breaking changes. Adapters across genuinely different integration
-shapes prove more about the protocol than a row of shallow ones would — which is
-the whole reason Antigravity was worth adding: it is a Python SDK like Claude
-Code, but one that drives a compiled runtime bundled in its own wheel rather
-than a CLI on your PATH, so `discover()` has a third thing to be honest about.
-
-## License
-
-MIT
+MIT license. See the focused docs for API details and compatibility aliases.

@@ -5,3 +5,11 @@
 *.pyc
 site/
 tests/
+**/.env
+**/.env.*
+**/.adk/
+**/*.db
+**/*.db-*
+.remember/
+dist/
+build/
