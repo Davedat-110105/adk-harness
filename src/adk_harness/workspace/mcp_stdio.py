@@ -69,10 +69,18 @@ async def _run(
         return {"outcome": "blocked", "operation": spec.method_id, "reason": decision.reason}
 
     if decision.outcome == "held":
-        answer = await context.elicit(
-            message=f"Approve {_summary(spec, arguments)}? {decision.reason}",
-            schema=Approval,
-        )
+        try:
+            answer = await context.elicit(
+                message=f"Approve {_summary(spec, arguments)}? {decision.reason}",
+                schema=Approval,
+            )
+        except Exception:
+            # A client that cannot ask has not approved anything.
+            return {
+                "outcome": "held",
+                "operation": spec.method_id,
+                "reason": "nothing ran; this client cannot ask a person for approval",
+            }
         if answer.action != "accept" or not answer.data or not answer.data.approve:
             return {
                 "outcome": "held",
@@ -98,9 +106,26 @@ async def _run(
 def build_server(authenticator: GoogleAuthenticator) -> tuple[Any, ServerState]:
     """Build the MCP server and the state its tools read."""
     from mcp.server.fastmcp import FastMCP
+    from mcp.server.lowlevel.server import NotificationOptions
 
     state = ServerState(authenticator)
     server = FastMCP("adk-harness")
+
+    # FastMCP builds its initialization options with no notification options, so
+    # it advertises tools.listChanged as false and a client has no reason to ask
+    # for the tool list again. The grant decides the tools, so it must be true.
+    low_level = server._mcp_server
+    original_options = low_level.create_initialization_options
+
+    def initialization_options(
+        notification_options: Any = None, experimental_capabilities: Any = None
+    ) -> Any:
+        return original_options(
+            notification_options or NotificationOptions(tools_changed=True),
+            experimental_capabilities,
+        )
+
+    low_level.create_initialization_options = initialization_options
 
     def make_handler(name: str) -> Any:
         async def handler(arguments: dict[str, Any] | None = None) -> Any:

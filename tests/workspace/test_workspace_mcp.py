@@ -135,3 +135,21 @@ def test_discovery_documents_come_from_the_installed_client() -> None:
 
     assert document["title"]
     assert "resources" in document
+
+
+def test_the_server_advertises_that_its_tool_list_changes(connected: Any) -> None:
+    """Without this the client never asks for the tool list again."""
+    server, _state, _calls = connected
+    options = server._mcp_server.create_initialization_options()
+
+    assert options.capabilities.tools is not None
+    assert options.capabilities.tools.listChanged is True
+
+
+async def test_a_client_that_cannot_ask_runs_nothing(connected: Any) -> None:
+    server, _state, calls = connected
+
+    result = await _call(server, "calendar_events_insert", {"calendarId": "primary"}, None)
+
+    assert calls == []
+    assert "held" in str(result.content).lower()
