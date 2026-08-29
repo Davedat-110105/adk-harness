@@ -347,10 +347,18 @@ def _register_mcp_server(args: argparse.Namespace) -> int:
     servers = config.get("mcpServers")
     if not isinstance(servers, dict):
         servers = {}
-    servers["adk-harness"] = {
+    entry: dict[str, Any] = {
         "command": sys.executable,
         "args": ["-m", "adk_harness", "mcp"],
     }
+    # Antigravity starts the server itself, so the client configuration has to
+    # travel with the entry rather than through the shell.
+    client_config = args.client_config or os.environ.get("ADK_HARNESS_GOOGLE_CLIENT_CONFIG")
+    if client_config:
+        entry["env"] = {
+            "ADK_HARNESS_GOOGLE_CLIENT_CONFIG": str(Path(client_config).expanduser().resolve())
+        }
+    servers["adk-harness"] = entry
     config["mcpServers"] = servers
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -414,7 +422,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "mcp":
         from adk_harness.workspace.mcp_stdio import serve
 
-        return serve(_build_auth(args.client_config))
+        return serve(lambda: _build_auth(args.client_config))
     if args.command == "install-plugin":
         return _install_plugin(args)
     if args.command == "readiness":

@@ -7,13 +7,13 @@ this process without passing through the model.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from typing import Any
 
 from pydantic import BaseModel, Field
 
 from adk_harness.auth.credentials import CredentialPurpose
-from adk_harness.auth.google import GoogleAuthenticator
+from adk_harness.auth.google import GoogleAuthenticator, GoogleAuthError
 from adk_harness.workspace.app import APPLICATION_SCOPES
 from adk_harness.workspace.tools import (
     SERVICES,
@@ -38,10 +38,22 @@ class Approval(BaseModel):
 class ServerState:
     """One connected person's grant and the tools it produced."""
 
-    def __init__(self, authenticator: GoogleAuthenticator) -> None:
-        self.authenticator = authenticator
+    def __init__(self, make_authenticator: Callable[[], GoogleAuthenticator]) -> None:
+        self._make_authenticator = make_authenticator
+        self._authenticator: GoogleAuthenticator | None = None
         self.grant: Grant | None = None
         self.specs: dict[str, ToolSpec] = {}
+
+    @property
+    def authenticator(self) -> GoogleAuthenticator:
+        """Build the authenticator on first use.
+
+        It needs an OAuth client configuration, which a person supplies when
+        they connect. The server still has to start without one.
+        """
+        if self._authenticator is None:
+            self._authenticator = self._make_authenticator()
+        return self._authenticator
 
     def adopt(self, grant: Grant | None) -> tuple[ToolSpec, ...]:
         self.grant = grant
@@ -103,12 +115,14 @@ async def _run(
     }
 
 
-def build_server(authenticator: GoogleAuthenticator) -> tuple[Any, ServerState]:
+def build_server(
+    make_authenticator: Callable[[], GoogleAuthenticator],
+) -> tuple[Any, ServerState]:
     """Build the MCP server and the state its tools read."""
     from mcp.server.fastmcp import FastMCP
     from mcp.server.lowlevel.server import NotificationOptions
 
-    state = ServerState(authenticator)
+    state = ServerState(make_authenticator)
     server = FastMCP("adk-harness")
 
     # FastMCP builds its initialization options with no notification options, so
@@ -152,6 +166,14 @@ def build_server(authenticator: GoogleAuthenticator) -> tuple[Any, ServerState]:
         )
         try:
             state.authenticator.login(CredentialPurpose.WORKSPACE, scopes=scopes)
+        except GoogleAuthError:
+            return {
+                "connected": False,
+                "reason": (
+                    "set ADK_HARNESS_GOOGLE_CLIENT_CONFIG to an OAuth client JSON "
+                    "file from your own Google Cloud project"
+                ),
+            }
         except Exception as exc:  # the SDK's message can carry callback URLs
             del exc
             return {"connected": False, "reason": "Google login did not complete"}
@@ -166,11 +188,17 @@ def build_server(authenticator: GoogleAuthenticator) -> tuple[Any, ServerState]:
         }
 
     server.add_tool(connect_workspace, name="connect_workspace")
-    register(state.adopt(resolve_grant(state.authenticator)))
+    try:
+        register(state.adopt(resolve_grant(state.authenticator)))
+    except Exception:
+        # No configuration and no stored grant simply means no tools yet.
+        state.adopt(None)
     return server, state
 
 
-def serve(authenticator: GoogleAuthenticator) -> int:  # pragma: no cover - entry point
-    server, _ = build_server(authenticator)
+def serve(
+    make_authenticator: Callable[[], GoogleAuthenticator],
+) -> int:  # pragma: no cover - entry point
+    server, _ = build_server(make_authenticator)
     server.run()
     return 0

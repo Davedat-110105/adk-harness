@@ -6,6 +6,7 @@ import pytest
 from mcp import types
 from mcp.shared.memory import create_connected_server_and_client_session
 
+from adk_harness.auth.google import GoogleAuthError
 from adk_harness.workspace import mcp_stdio, tools
 from adk_harness.workspace.tools import Grant, build_tools, decide
 
@@ -70,7 +71,7 @@ def connected(monkeypatch: pytest.MonkeyPatch) -> Any:
         return {"id": "event-1"}
 
     monkeypatch.setattr(mcp_stdio, "execute", fake_execute)
-    server, state = mcp_stdio.build_server(_StubAuthenticator(grant))  # type: ignore[arg-type]
+    server, state = mcp_stdio.build_server(lambda: _StubAuthenticator(grant))  # type: ignore[arg-type,return-value]
     return server, state, calls
 
 
@@ -153,3 +154,16 @@ async def test_a_client_that_cannot_ask_runs_nothing(connected: Any) -> None:
 
     assert calls == []
     assert "held" in str(result.content).lower()
+
+
+def test_the_server_starts_without_an_oauth_client_configuration() -> None:
+    """A judge installs before they configure anything, and it must still run."""
+
+    def unconfigured() -> Any:
+        raise GoogleAuthError("Google OAuth client configuration is not configured")
+
+    server, state = mcp_stdio.build_server(unconfigured)
+
+    assert state.grant is None
+    assert state.specs == {}
+    assert server is not None
