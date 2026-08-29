@@ -18,8 +18,13 @@ into the caller's Python environment. The Python package includes the official
 Google ADK, Antigravity, authentication, and Workspace client dependencies.
 
 Run `adk-harness install-plugin` to copy the packaged rules and skill into
-`~/.gemini/config/plugins/adk-harness`. Antigravity reads that directory on
-start and lists the plugin under Settings, Customizations.
+`~/.gemini/config/plugins/adk-harness` and register `adk-harness mcp` in
+`~/.gemini/config/mcp_config.json`. Antigravity lists the plugin under
+Settings, Customizations, and the server under Installed MCP Servers.
+
+Ask the agent to connect a Workspace account. `connect_workspace` opens
+Google's consent screen, and the operations you approve become the tools the
+model can call. Approve nothing and there are no tools.
 
 `adk-harness doctor` reports whether the installed Antigravity SDK is available.
 It is a local diagnostic: it does not authenticate, call a model, create cloud

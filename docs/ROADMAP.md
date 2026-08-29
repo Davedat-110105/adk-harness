@@ -13,6 +13,9 @@ evidence, not supported Phase 1 behavior.
 - Each exposed operation passes the local policy gate. Versioned workflow
   records bind identity, scope, policy version, resource versions, timestamps,
   and content hashes; approvals do not grant permission.
+- Antigravity calls the application over MCP. `adk-harness mcp` generates its
+  tool list from the granted scopes and asks for approval through elicitation.
+  Added 2026-08-29; the retired generic MCP server stays retired.
 - Cloud onboarding, per-user OAuth, remote execution, and approved history or
   artifact transfer are future milestones. No deployment or live API validation
   is claimed by this package.

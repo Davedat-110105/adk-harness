@@ -24,24 +24,34 @@ which is where Antigravity looks for local plugins.
 log in, create a project, transfer Workspace data, or run a model. Configure
 credentials through Google's supported tools and review the scopes before use.
 
+## Which tools appear
+
+Nothing here lists operations by hand. `connect_workspace` opens Google's
+consent screen, and the tools are whatever the granted token covers. Google's
+discovery documents declare every method and the scopes it accepts, so
+approving Calendar alone yields Calendar operations and approving nothing
+yields none.
+
 ## What the gate decides
+
+The verb decides, read from the same discovery document.
 
 | Operation | Decision |
 |---|---|
-| `calendar_events_list`, `gmail_users_drafts_get` | **allow** — reads only |
-| `calendar_events_insert`, `gmail_users_drafts_create` | **ask** — others will see it |
-| `gmail_users_messages_send` | **deny** — cannot be undone; a person sends |
-| `calendar_acl_update` | **deny** — access is granted by people |
-| anything unrecognised | **ask** — the policy fails closed |
+| any `GET`, such as `calendar_events_list` | allow, a read of named resources |
+| any `POST`, `PATCH`, `PUT` or `DELETE` | held, because others will see it |
+| anything under `acl` or `permissions` | blocked, access is granted by people |
+| anything ending in `send` | blocked, sending cannot be undone |
 
-An approval must come from the trusted host integration. The model cannot
-self-approve. Versioned workflow records bind the request, exact change hash,
-actor, scope, policy version, resource versions, and trace ID.
+A held operation has run nothing. The server asks the person through MCP
+elicitation, so the answer arrives from the client without passing through the
+model. A client that cannot ask leaves the operation held.
 
 ## Calling the tools
 
-Parameters are **snake_case** — `calendar_id`, `max_results` — not the camelCase
-in Google's REST docs. ADK converts them; camelCase raises `KeyError`.
+Parameters use Google's own REST spelling, `calendarId` and `maxResults`, since
+the server calls the discovery client directly. The snake_case form belongs to
+the ADK toolsets used elsewhere in this package.
 
 ## Configuration
 

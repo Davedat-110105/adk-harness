@@ -13,8 +13,18 @@ python -m pip install adk-harness
 adk-harness doctor
 ```
 
-The old plugin setup and server launch commands are not replacement paths. The
-native assets in `plugins/antigravity/` are the supported integration surface.
+The old plugin setup and server launch commands are not replacement paths.
+`adk_harness.mcp_server`, `adk_harness.mcp`, and `adk-harness serve` remain
+removed. The native assets in `plugins/antigravity/` are the supported
+integration surface, and `adk-harness install-plugin` copies them into
+`~/.gemini/config/plugins/adk-harness`.
+
+A Workspace MCP server was added later, under different names. `adk-harness
+mcp` serves only Workspace operations generated from the scopes a person
+granted, and `install-plugin` registers it in
+`~/.gemini/config/mcp_config.json`, merging with any servers already listed.
+It shares nothing with the retired server beyond the protocol.
+
 The npm launcher requires `uv`, preserves the caller working directory, and
 passes arguments without a shell.
 

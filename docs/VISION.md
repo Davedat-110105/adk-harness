@@ -9,6 +9,11 @@ from 2026-08-27. The MCP server, multi-vendor fleet, and claimed deployed
 Cloud Run fleets described in those captures are retired and are not shipped
 or evidence of the current runtime.
 
+A Workspace MCP server was added on 2026-08-29. It is a different thing from
+the one described below: no coding harnesses, no `mcp_server.py`, no `serve`
+command, and its tools come from the granted scopes rather than a fixed list.
+See `docs/architecture.md`.
+
 The goal, in the owner's words: Antigravity orchestrates the models in its own
 environment locally; that syncs to a remote workspace; eventually several
 Antigravity instances work against the same remote server.

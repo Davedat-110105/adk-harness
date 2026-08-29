@@ -1,5 +1,10 @@
 # Approved Workspace Execution Implementation Plan
 
+> **Superseded in part on 2026-08-29.** This plan forbids MCP. A Workspace MCP
+> server now ships anyway, because MCP is the only way Antigravity accepts new
+> tools; skills and rules are text. The prohibition still holds for the generic
+> coding-harness server this plan retired. See `docs/architecture.md`.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Track completion with the checkboxes below. Claim implementation files before editing; the integrator owns commits.
 
 **Goal:** Implement an Antigravity-only enterprise workflow: Google login, approved GCP onboarding, Workspace tasks, and user-approved local/cloud sync.
