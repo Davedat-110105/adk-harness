@@ -165,3 +165,30 @@ def test_packed_npm_install_exposes_executable(tmp_path: Path) -> None:
     invocation = json.loads((tmp_path / "spawn.json").read_text(encoding="utf-8"))
     from_index = invocation["args"].index("--from")
     assert invocation["args"][from_index + 1] == str(installed.parent.parent.resolve())
+
+
+def test_launcher_installs_the_plugin_without_python(tmp_path: Path) -> None:
+    """The Node path must copy the assets without ever reaching for uv."""
+    destination = tmp_path / "adk-harness"
+    result = _run_launcher_with_stub(
+        ROOT / "bin" / "adk-harness.js",
+        tmp_path,
+        "install-plugin",
+        "--plugin-dir",
+        str(destination),
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert not (tmp_path / "spawn.json").exists()
+    assert (destination / "plugin.json").is_file()
+    assert (destination / "skills" / "governed-workspace" / "SKILL.md").is_file()
+    assert str(destination) in result.stdout
+
+
+def test_launcher_rejects_a_plugin_dir_without_a_path(tmp_path: Path) -> None:
+    result = _run_launcher_with_stub(
+        ROOT / "bin" / "adk-harness.js", tmp_path, "install-plugin", "--plugin-dir"
+    )
+
+    assert result.returncode == 2
+    assert "--plugin-dir needs a path" in result.stderr
