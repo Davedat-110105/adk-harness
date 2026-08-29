@@ -1,12 +1,11 @@
 __pycache__/
 ui/approval/node_modules/
 ui/approval/dist/
-!src/adk_harness/ui/approval/
-!src/adk_harness/ui/approval/dist/
-!src/adk_harness/ui/approval/dist/main.js
 *.pyc
 .venv/
 dist/
+!ui/approval/dist/
+!ui/approval/dist/main.js
 .DS_Store
 .env
 .env.*

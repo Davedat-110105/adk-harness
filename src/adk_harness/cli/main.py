@@ -7,6 +7,7 @@ import asyncio
 import importlib.resources
 import json
 import os
+import shutil
 import sys
 import time
 from pathlib import Path
@@ -306,6 +307,31 @@ def _readiness(args: argparse.Namespace) -> int:
     return 0 if report.ready else 1
 
 
+def _install_plugin(args: argparse.Namespace) -> int:
+    """Copy the packaged Antigravity assets into the local plugin directory."""
+    source = Path(str(importlib.resources.files("adk_harness"))) / "plugins" / "antigravity"
+    if not source.is_dir():
+        # An editable checkout keeps the native assets outside the package.
+        source = Path(__file__).resolve().parents[3] / "plugins" / "antigravity"
+    if not source.is_dir():
+        print("the packaged Antigravity plugin is missing", file=sys.stderr)
+        return 2
+    default = Path.home() / ".gemini" / "config" / "plugins" / "adk-harness"
+    destination = Path(args.plugin_dir).expanduser() if args.plugin_dir else default
+    try:
+        if destination.exists():
+            shutil.rmtree(destination)
+        shutil.copytree(source, destination)
+    except OSError as exc:
+        print(f"the plugin could not be installed: {exc}", file=sys.stderr)
+        return 2
+    print(f"installed: {destination}")
+    for path in sorted(destination.rglob("*")):
+        if path.is_file():
+            print(f"  {path.relative_to(destination)}")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Local Google Antigravity workspace integration"
@@ -313,7 +339,16 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "command",
         nargs="?",
-        choices=("doctor", "status", "login", "logout", "ui", "onboard", "readiness"),
+        choices=(
+            "doctor",
+            "status",
+            "login",
+            "logout",
+            "ui",
+            "onboard",
+            "readiness",
+            "install-plugin",
+        ),
         default="doctor",
     )
     parser.add_argument(
@@ -332,6 +367,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--outbox", help="durable local SQLite outbox path")
     parser.add_argument("--handoff", help="approved terraform_handoff JSON for readiness")
     parser.add_argument("--select-project", help="verified select_project checkpoint JSON")
+    parser.add_argument("--plugin-dir", help="destination for install-plugin")
     args = parser.parse_args(argv)
     if args.command == "doctor":
         return asyncio.run(_doctor())
@@ -343,6 +379,8 @@ def main(argv: list[str] | None = None) -> int:
         return _logout(args)
     if args.command in {"ui", "onboard"}:
         return _ui(args)
+    if args.command == "install-plugin":
+        return _install_plugin(args)
     if args.command == "readiness":
         if not args.handoff or not args.select_project:
             parser.error("readiness requires --handoff and --select-project")

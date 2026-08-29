@@ -22,6 +22,11 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
+      # The packaged browser bundle is generated, so it must exist before any build.
+      - name: Build the approval UI bundle
+        run: |
+          npm ci --prefix ui/approval
+          npm run build --prefix ui/approval
       - name: Build both distributions and check contents
         run: |
           python -m pip install build pytest pytest-asyncio uv "hatchling==1.32.0"
@@ -44,11 +49,8 @@ jobs:
       - name: Verify packed npm install and launcher behavior
         run: python -m pytest tests/installation -q
 
-      - name: Build and test approval UI
-        run: |
-          npm ci --prefix ui/approval
-          npm run build --prefix ui/approval
-          npm test --prefix ui/approval -- --run
+      - name: Test the approval UI
+        run: npm test --prefix ui/approval -- --run
 
   base-install:
     name: Base install and retired surface check
@@ -60,6 +62,15 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Build the approval UI bundle
+        run: |
+          npm ci --prefix ui/approval
+          npm run build --prefix ui/approval
 
       - name: Install the base package only
         run: |
@@ -95,6 +106,11 @@ jobs:
         with:
           node-version: "22"
 
+      - name: Build the approval UI bundle
+        run: |
+          npm ci --prefix ui/approval
+          npm run build --prefix ui/approval
+
       - name: Install with development tools
         run: |
           python -m pip install --upgrade pip
@@ -121,6 +137,15 @@ jobs:
         with:
           python-version: "3.12"
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Build the approval UI bundle
+        run: |
+          npm ci --prefix ui/approval
+          npm run build --prefix ui/approval
+
       - name: Install
         run: |
           python -m pip install --upgrade pip
@@ -138,6 +163,15 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Build the approval UI bundle
+        run: |
+          npm ci --prefix ui/approval
+          npm run build --prefix ui/approval
 
       # Catch image-only dependency and startup failures.
       - name: Build the image

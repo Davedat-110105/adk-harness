@@ -17,6 +17,10 @@ It passes arguments as an argument vector and does not install dependencies
 into the caller's Python environment. The Python package includes the official
 Google ADK, Antigravity, authentication, and Workspace client dependencies.
 
+Run `adk-harness install-plugin` to copy the packaged rules and skill into
+`~/.gemini/config/plugins/adk-harness`. Antigravity reads that directory on
+start and lists the plugin under Settings, Customizations.
+
 `adk-harness doctor` reports whether the installed Antigravity SDK is available.
 It is a local diagnostic: it does not authenticate, call a model, create cloud
 resources, or transfer task data.

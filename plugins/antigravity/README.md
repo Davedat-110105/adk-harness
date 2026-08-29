@@ -13,8 +13,12 @@ gcloud auth application-default login --client-id-file=client_secret.json \
     --scopes=openid,https://www.googleapis.com/auth/cloud-platform,\
 https://www.googleapis.com/auth/calendar.events,\
 https://www.googleapis.com/auth/gmail.compose
+adk-harness install-plugin
 adk-harness doctor
 ```
+
+`install-plugin` copies this directory into `~/.gemini/config/plugins/adk-harness`,
+which is where Antigravity looks for local plugins.
 
 `doctor` checks whether the local Antigravity SDK can be discovered. It does not
 log in, create a project, transfer Workspace data, or run a model. Configure

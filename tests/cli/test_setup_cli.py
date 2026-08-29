@@ -52,3 +52,22 @@ def test_cli_rejects_retired_commands() -> None:
         assert exc.code != 0
     else:
         raise AssertionError("serve must not be a supported entrypoint")
+
+
+def test_install_plugin_copies_packaged_assets(tmp_path, capsys) -> None:
+    destination = tmp_path / "plugins" / "adk-harness"
+    assert main(["install-plugin", "--plugin-dir", str(destination)]) == 0
+    assert (destination / "plugin.json").is_file()
+    assert (destination / "skills" / "governed-workspace" / "SKILL.md").is_file()
+    assert (destination / "rules" / "governance.md").is_file()
+    assert str(destination) in capsys.readouterr().out
+
+
+def test_install_plugin_replaces_an_existing_installation(tmp_path) -> None:
+    destination = tmp_path / "adk-harness"
+    destination.mkdir()
+    stale = destination / "mcp_config.json"
+    stale.write_text("{}", encoding="utf-8")
+    assert main(["install-plugin", "--plugin-dir", str(destination)]) == 0
+    assert not stale.exists()
+    assert (destination / "plugin.json").is_file()

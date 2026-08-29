@@ -110,8 +110,7 @@ packages = ["src/adk_harness"]
 "plugins/antigravity/README.md" = "adk_harness/plugins/antigravity/README.md"
 "plugins/antigravity/rules/governance.md" = "adk_harness/plugins/antigravity/rules/governance.md"
 "plugins/antigravity/skills/governed-workspace/SKILL.md" = "adk_harness/plugins/antigravity/skills/governed-workspace/SKILL.md"
-"src/adk_harness/ui/approval/index.html" = "adk_harness/ui/approval/index.html"
-"src/adk_harness/ui/approval/dist/main.js" = "adk_harness/ui/approval/dist/main.js"
+"ui/approval/dist/main.js" = "adk_harness/ui/approval/dist/main.js"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

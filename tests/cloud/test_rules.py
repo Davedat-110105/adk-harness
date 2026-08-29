@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
+from importlib.resources import files
 
 import pytest
 
@@ -216,9 +216,11 @@ def test_publisher_uses_real_discovery_http_request_shape(tmp_path):
             self.closed = True
 
     transport = Transport()
-    document = Path(
-        ".venv/Lib/site-packages/googleapiclient/discovery_cache/documents/firebaserules.v1.json"
-    ).read_text()
+    document = (
+        files("googleapiclient.discovery_cache")
+        .joinpath("documents/firebaserules.v1.json")
+        .read_text()
+    )
     service = build_from_document(document, http=transport)
     result = RulesPublisher(
         project_id="demo",

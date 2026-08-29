@@ -31,6 +31,13 @@ Run `adk-harness doctor` to check discovery of the local Antigravity SDK. The
 check does not make a model call or transfer Workspace data. See [Getting
 started](docs/getting-started.md) for the local ADK example.
 
+## Antigravity plugin
+
+`adk-harness install-plugin` copies the packaged rules and skill into
+`~/.gemini/config/plugins/adk-harness`, where Antigravity reads them. The app
+lists the result under Settings, Customizations. Pass `--plugin-dir` to install
+somewhere else. Reinstalling replaces the previous copy.
+
 ## Governance
 
 Allowed actions run. Held actions have run nothing and require a human answer.
