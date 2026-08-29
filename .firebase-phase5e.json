@@ -1,0 +1,15 @@
+{
+  "firestore": {
+    "rules": "infra/gcp/firestore.rules"
+  },
+  "emulators": {
+    "firestore": {
+      "host": "127.0.0.1",
+      "port": 19083
+    },
+    "ui": {
+      "enabled": false
+    },
+    "singleProjectMode": true
+  }
+}

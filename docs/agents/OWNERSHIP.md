@@ -1,24 +1,27 @@
 # File ownership
 
-Last updated: 2026-08-27.
+Last updated: 2026-08-28.
 
 ## Current status
 
-The audit remediation and feature-layout assignments are complete. No files
-remain reserved by those assignments. The integrator handles the user's
-requested commits and push; subagents do not write Git state.
+Phase 1 migration is assigned to `/root/phase1_architecture`. The integrator
+handles commits and push; subagents do not write Git state.
 
 The original task history is in [TASKS.md](TASKS.md). Those old filenames are
 historical; use [architecture.md](../architecture.md) for current module paths
 and [AUDIT_REMEDIATION.md](../AUDIT_REMEDIATION.md) for the remediation evidence.
 
+## Phase 1 owner
+
+The phase 1 owner may edit workflow models, Antigravity integration, package
+and CLI configuration, plugin assets, retired architecture callers, and the
+corresponding tests. Governance and Workspace behavior remains protected.
+
 ## Shared files require coordination
 
 | Files | Why |
 |---|---|
-| `src/adk_harness/coding/protocol.py` | Shared adapter contract; preserve its signatures |
 | `src/adk_harness/governance/` | Policy, precedent admission and audit safety properties |
-| `src/adk_harness/coding/registry.py` | Shared adapter discovery |
 | `src/adk_harness/__init__.py`, `_compat.py`, feature `__init__.py` files | Public exports and compatibility |
 | `pyproject.toml`, `package.json`, plugin manifests | Installation and dependency behavior |
 

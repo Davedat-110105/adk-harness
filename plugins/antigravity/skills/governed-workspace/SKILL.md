@@ -1,13 +1,13 @@
 ---
 name: governed-workspace
-description: Use when working with the user's Google Calendar or Gmail through the adk-harness tools — scheduling, checking availability, drafting mail — and whenever a call comes back held or blocked, to explain it and record an approval.
+description: Use when working with the user's Google Workspace through the governed Antigravity application, especially when an operation is held or blocked.
 ---
 
 # Working in Google Workspace, under a policy gate
 
-Calendar and Gmail operations are available as tools. Each one is judged on its
-own before it runs, so reading a calendar and writing to it are separate
-decisions.
+Calendar, Gmail drafts, Docs, and Sheets operations are exposed only when the
+local application has configured that service. Each operation is judged on its
+own before it runs.
 
 ## Calling the tools
 
@@ -27,7 +27,7 @@ guess that lands in someone's calendar is worse than a question.
 **Held for approval** — the reply begins `HELD FOR APPROVAL — nothing has run.`
 That is literal. Say what was about to happen, in the person's terms: who would
 see it, what it would say, when it would be. Then ask. A trusted host may
-record a precedent after the person answers; the model cannot approve itself
+record an approval after the person answers; the model cannot approve itself
 or call a decision recording tool.
 
 **Blocked** — the reply begins `BLOCKED by policy — nothing has run.` A decision,
@@ -43,16 +43,14 @@ past it, and do not reach for a different tool that achieves the same thing.
 
 ## Recording a decision
 
-The trusted host can turn one answer into a standing precedent. It should write
-the person's reasoning, not a restatement of the action: *"Dave said internal
-review slots on our own calendar are routine"* is useful in six months;
-*"approved"* is not.
+The trusted host records the actor, exact request hash, scope, policy version,
+resource versions, expiry, and reasoning. Do not offer to record a decision
+nobody made. Activity events are evidence and do not grant permission.
 
-Do not offer to record a decision nobody made. A precedent answers a question
-that was actually asked.
+## Current boundary
 
-## Seeing what happened
-
-`governance_audit` lists every decision this session — allowed, held, blocked, or
-applied from an earlier precedent, with reasons. Use it when someone asks why
-something did or did not happen, rather than reconstructing it from memory.
+Local discovery and governed Workspace orchestration are supported. Use the
+trusted local UI for setup handoff and consent gated preview, submission,
+manual sync, result download, and unknown operation recovery. Cloud deployment,
+popup login, and external Workspace execution remain live proof boundaries;
+report them as awaiting authorization when not explicitly enabled.

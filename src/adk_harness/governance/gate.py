@@ -328,7 +328,8 @@ class CoactraGovernance(BasePlugin):
     def _resource_for(self, tool: Any, tool_args: Mapping[str, Any]) -> str:
         """Resolve the policy target from cwd, the registered resource, or the tool name.
 
-        AgentTool arguments omit cwd, so build_fleet registers each harness's directory.
+        ADK tool arguments may omit cwd, so Workspace applications register
+        each tool's governed resource explicitly.
         """
         cwd = tool_args.get("cwd")
         if cwd:

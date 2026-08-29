@@ -1,7 +1,11 @@
 __pycache__/
+ui/approval/node_modules/
+ui/approval/dist/
 *.pyc
 .venv/
 dist/
+!ui/approval/dist/
+!ui/approval/dist/main.js
 .DS_Store
 .env
 .env.*
@@ -13,6 +17,11 @@ build/
 *.egg-info/
 .pytest_cache/
 .ruff_cache/
+infra/gcp/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+*.tfvars
 
 # Agent audit output — working notes, not part of the library
 docs/audits/
@@ -26,3 +35,21 @@ docs/audits/
 /*_check.txt
 /find_*.py
 /scratch_*
+
+# OAuth client configuration and credential material. The packaging configs
+# already exclude these; git was the one path that did not.
+client_secret*.json
+credentials.json
+token.json
+application_default_credentials.json
+service-account*.json
+service_account*.json
+
+# Test and emulator scratch output. `.firebase-phase5e.json` is real config
+# used by tests/emulator/README.md, so it is deliberately not listed here.
+.pytest-task*-temp/
+coverage.json
+ui/approval/coverage/
+firestore-debug.log
+firestore-*.log
+firestore-*.err

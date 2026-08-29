@@ -1,81 +1,34 @@
-"""A governed Workspace fleet, deployable and shared by a team.
+"""A governed local Google Workspace application for Antigravity.
 
-Three layers, in the order a request meets them:
-
-1. **ContentArmor** screens outbound tool arguments and quarantines
-   instruction-shaped text coming back from Gmail or Docs. Retrieved content is
-   data; it is never allowed to read as a command.
-2. **CoactraGovernance** decides each operation. Reads flow, writes ask a
-   person, and changing who can see a calendar is refused outright.
-3. **FirestoreActionLedger** records what happened — actor, policy result,
-   hashed inputs, outcome — append-only, with an idempotency key so a retry
-   cannot double-record.
-
-Deploy:
-
-    adk deploy cloud_run --project=$GOOGLE_CLOUD_PROJECT --region=us-central1 \\
-        --with_ui ./examples/agents/workspace
-
-Which mailbox and calendar it can reach
----------------------------------------
-On Cloud Run there is no browser, so there is no user consent: the service
-authenticates as its own identity. That identity cannot see a personal calendar
-or mailbox, and no flag changes it — reaching one needs domain-wide delegation,
-which needs a Google Workspace organisation.
-
-Share a calendar with the service account and set `ADK_CALENDAR_ID`. Run
-locally under `gcloud auth application-default login` to act as yourself.
-
-Set `ADK_LEDGER=1` to write the action ledger to Firestore. It is off by
-default because a demo that silently writes to a database is a surprise.
+The example selects services and operations explicitly. Content screening and
+the policy gate run locally; a held write has not run and requires a trusted
+host approval. It does not provision cloud resources or transfer history.
+Configure Google's supported credentials yourself before any live use.
 """
 
 from __future__ import annotations
 
 import os
+from datetime import UTC, datetime, timedelta
 
 from coactra import Decision, DecisionOutcome, PolicyRequest, Scope
 
+from adk_harness.auth import CredentialPurpose, GoogleAuthenticator, SecureCredentialStore
 from adk_harness.governance.content_armor import ContentArmor
-from adk_harness.governance.ledger import FirestoreActionLedger
-from adk_harness.workspace import build_workspace_app
+from adk_harness.workspace import CredentialReference, WorkspaceConsent, build_workspace_app
 
 CALENDAR_ID = os.environ.get("ADK_CALENDAR_ID", "primary")
-SERVICES = tuple(os.environ.get("ADK_SERVICES", "calendar,gmail").split(","))
+CALENDAR_TIME_MIN = os.environ.get("ADK_CALENDAR_TIME_MIN", "2026-09-01T00:00:00Z")
+CALENDAR_TIME_MAX = os.environ.get("ADK_CALENDAR_TIME_MAX", "2026-09-02T00:00:00Z")
+SERVICES = tuple(os.environ.get("ADK_SERVICES", "calendar").split(","))
 ALLOWED_DOMAINS = tuple(
     d for d in os.environ.get("ADK_ALLOWED_DOMAINS", "gmail.com").split(",") if d
 )
 
-# Every verb that changes something. "create" was missing from a first version,
-# so gmail_users_drafts_create was judged a read and a draft appeared in a real
-# mailbox with nobody asked. A gate that decides by matching substrings fails
-# open when the list is short, which is the wrong direction to fail.
-WRITE_VERBS = (
-    "insert",
-    "create",
-    "update",
-    "delete",
-    "patch",
-    "move",
-    "import",
-    "trash",
-    "modify",
-    "batch",
-)
-
-# Drafting is reversible and a person clicks send. Sending is not. An agent
-# that can email colleagues on a policy misfire is a different risk class from
-# one that can add a calendar entry, so the send operations are simply not
-# given to the model — the cheapest control available, applied before any
-# policy runs.
+# This sample exposes one bounded calendar list read.
+WRITE_VERBS = ("insert", "create", "update", "delete", "patch", "modify", "batch")
 TOOLS = [
-    "calendar_events_list",
-    "calendar_events_get",
-    "calendar_events_insert",
-    "calendar_events_update",
-    "gmail_users_drafts_list",
-    "gmail_users_drafts_get",
-    "gmail_users_drafts_create",
+    "calendar_list_events",
 ]
 
 
@@ -108,7 +61,7 @@ class TeamPolicy:
                 outcome=DecisionOutcome.deny,
                 reason=(
                     f"{tool} delivers mail to real people and cannot be undone. "
-                    "This fleet drafts; a person sends."
+                    "This app drafts; a person sends."
                 ),
                 source="team-policy",
             )
@@ -139,40 +92,48 @@ class TeamPolicy:
 
 async def _build():
     armor = ContentArmor(allowed_email_domains=ALLOWED_DOMAINS)
-    ledger = _ledger()
-    fleet = await build_workspace_app(
+    subject = os.environ.get("ADK_GOOGLE_SUBJECT", "user:local")
+    authenticator = GoogleAuthenticator(
+        client_config={"installed": {"client_id": os.environ.get("GOOGLE_CLIENT_ID", "example")}},
+        store=SecureCredentialStore(),
+    )
+    consent = WorkspaceConsent(
+        subject=subject,
+        applications=("calendar",),
+        resources={"calendar": (CALENDAR_ID,)},
+        operations=tuple(TOOLS),
+        approved=False,
+        expires_at=datetime.now(UTC) + timedelta(hours=1),
+        calendar_windows={CALENDAR_ID: (CALENDAR_TIME_MIN, CALENDAR_TIME_MAX)},
+    )
+    workspace_app = await build_workspace_app(
         policy=TeamPolicy(),
         scope=Scope(tenant_id="team", namespace="workspace"),
+        authenticator=authenticator,
+        credential_reference=CredentialReference(
+            subject=subject, purpose=CredentialPurpose.WORKSPACE
+        ),
+        consent=consent,
+        resource_allowlist={"calendar": (CALENDAR_ID,)},
         services=SERVICES,
         tool_filter=TOOLS,
-        principal="user:team",
-        name="workspace_fleet",
+        principal=subject,
+        name="workspace_app",
         armor=armor,
-        ledger=ledger,
         instruction=(
-            "You help a research team manage a shared calendar and draft mail. "
-            f"Use calendar id '{CALENDAR_ID}'. Ask for a date, time or recipient "
-            "if you were not given one; never invent them.\n\n"
-            "You can draft email. You cannot send it — that is deliberate, and "
-            "a person will send. Say so rather than looking for another way.\n\n"
+            "You help a research team inspect a shared calendar. "
+            f"Use calendar id '{CALENDAR_ID}' and only the consented time window.\n\n"
             "Every tool call passes a policy gate. A 'blocked' result is a "
             "decision, not an error: say why and stop. If the gate asks for "
             "confirmation, wait."
         ),
     )
 
-    return fleet, armor, ledger
+    return workspace_app, armor
 
 
-def _ledger() -> FirestoreActionLedger | None:
-    """Off unless asked for. A demo that silently writes to a database is rude."""
-    if os.environ.get("ADK_LEDGER") != "1":
-        return None
-    return FirestoreActionLedger(collection="action_ledger")
-
-
-def _fleet():
-    """ADK imports this module and reads `app`, so the fleet is built eagerly.
+def _workspace_app():
+    """ADK imports this module and reads `app`, so the app is built eagerly.
 
     A running loop means ADK's web server is loading us and `asyncio.run` would
     refuse, so hand the build to a worker thread in that case.
@@ -189,6 +150,6 @@ def _fleet():
         return pool.submit(lambda: asyncio.run(_build())).result()
 
 
-fleet, armor, ledger = _fleet()
-app = fleet.app
-governance = fleet.governance
+workspace_app, armor = _workspace_app()
+app = workspace_app.app
+governance = workspace_app.governance

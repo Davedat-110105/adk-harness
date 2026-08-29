@@ -7,14 +7,26 @@ Every task shares these requirements:
 
 - Python 3.12+, `from __future__ import annotations`, full type annotations.
 - Use the repository's virtualenv: `.venv/bin/python`, `.venv/bin/pytest`.
-- Docstrings explain *why*, not *what*. Match the voice of `protocol.py` and
-  `registry.py` — they are the house style.
-- No vendor import at module level (contract rule 2).
-- Tests pass with the vendor tool absent.
+- Docstrings explain *why*, not *what*. Match the concise style of the current
+  workflow and integration modules.
+- Google vendor imports stay lazy where optional runtime discovery requires it.
+- Tests pass with the Antigravity runtime absent.
+
+## Approved workspace execution migration
+
+Phase 1 retires the generic coding harness, MCP server, and multi-vendor
+plugin architecture. The supported local entrypoint is the official Google
+Antigravity SDK integration plus governed Workspace application. Use the
+versioned immutable workflow records and strict state transitions described in
+CONTRACT.md. Do not preserve retired APIs with compatibility shims.
+
+The migration rules above are current. Everything below the historical record
+heading is retained for provenance and is not an active implementation contract;
+old product names, modules, and test paths in those records must not be revived.
 
 ---
 
-## Done, kept only as a record
+## Historical record: completed pre-migration tasks
 
 Tasks 1–4 — the Codex and Claude Code adapters, `HarnessAgent` and
 `build_fleet` — are landed and tested. Their full specifications were removed
@@ -36,7 +48,7 @@ removed Calendar experiment. See [OWNERSHIP.md](OWNERSHIP.md).
 
 ---
 
-## Task 5 — the opencode adapter
+## Historical Task 5 — the opencode adapter
 
 **Status:** completed — the original specification below is historical
 **Implementation files:** `src/adk_harness/adapters/opencode.py`,
@@ -63,7 +75,7 @@ it to completion.
 
 ---
 
-## Task 6 — a precedent store that survives a restart
+## Historical Task 6 — a precedent store that survives a restart
 
 **Status:** completed — the original specification below is historical
 **Implementation files:** `src/adk_harness/governance/stores.py`, `tests/test_stores.py`
@@ -94,7 +106,7 @@ for the same facts. Use `tmp_path`.
 
 ---
 
-## Task 7 — the Antigravity adapter
+## Historical Task 7 — the Antigravity adapter
 
 **Owner:** integrator — landed
 **Files:** `src/adk_harness/adapters/antigravity.py`,

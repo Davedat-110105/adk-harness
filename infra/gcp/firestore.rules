@@ -1,0 +1,335 @@
+rules_version = '2';
+
+// Browser writes are limited to the named control database. The runtime
+// database is an execution-record surface: clients may read staged, owned
+// documents, but only the trusted worker may write it.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isControl() { return database == 'control'; }
+    function isRuntime() { return database == 'runtime'; }
+    function signedIn() { return request.auth != null; }
+    function boundedId(value) {
+      return value is string && value.size() > 0 && value.size() <= 200;
+    }
+    function boundedScopeValue(value) {
+      return value is string && value.size() > 0 && value.size() <= 100;
+    }
+    function boundedScope(value) {
+      return value is list && value.size() > 0 && value.size() <= 20
+        && boundedScopeValue(value[0])
+        && (value.size() < 2 || boundedScopeValue(value[1]))
+        && (value.size() < 3 || boundedScopeValue(value[2]))
+        && (value.size() < 4 || boundedScopeValue(value[3]))
+        && (value.size() < 5 || boundedScopeValue(value[4]))
+        && (value.size() < 6 || boundedScopeValue(value[5]))
+        && (value.size() < 7 || boundedScopeValue(value[6]))
+        && (value.size() < 8 || boundedScopeValue(value[7]))
+        && (value.size() < 9 || boundedScopeValue(value[8]))
+        && (value.size() < 10 || boundedScopeValue(value[9]))
+        && (value.size() < 11 || boundedScopeValue(value[10]))
+        && (value.size() < 12 || boundedScopeValue(value[11]))
+        && (value.size() < 13 || boundedScopeValue(value[12]))
+        && (value.size() < 14 || boundedScopeValue(value[13]))
+        && (value.size() < 15 || boundedScopeValue(value[14]))
+        && (value.size() < 16 || boundedScopeValue(value[15]))
+        && (value.size() < 17 || boundedScopeValue(value[16]))
+        && (value.size() < 18 || boundedScopeValue(value[17]))
+        && (value.size() < 19 || boundedScopeValue(value[18]))
+        && (value.size() < 20 || boundedScopeValue(value[19]));
+    }
+    function digest(value) { return value is string && value.size() == 64; }
+    function nativeTime(value) { return value is timestamp; }
+    function googleIdentity(uid, subject) {
+      return signedIn()
+        && request.auth.uid == uid
+        && request.auth.token.firebase.sign_in_provider == 'google.com'
+        && request.auth.token.firebase.identities['google.com'][0] == subject;
+    }
+    function member(projectId, workspaceId, uid, subject) {
+      let membership = get(/databases/$(database)/documents/projects/$(projectId)/workspaces/$(workspaceId)/members/$(uid));
+      return googleIdentity(uid, subject)
+        && membership.data.firebase_uid == uid
+        && membership.data.google_sub == subject
+        && membership.data.project_id == projectId
+        && membership.data.workspace_id == workspaceId
+        && membership.data.status == 'active'
+        && membership.data.expires_at is timestamp
+        && request.time < membership.data.expires_at;
+    }
+    function hashMatches(data, hashField, canonicalField) {
+      return canonicalHash(data[canonicalField], data[hashField]);
+    }
+    function requestHashMatches(data) {
+      let canonical = data.canonical_payload;
+      let hash = data.request_hash;
+      return digest(hash)
+        && canonical is string
+        && canonical.size() > 0
+        && canonical.size() <= 100000
+        && hashing.sha256(canonical).toHexString().lower() == hash;
+    }
+    function changesetHashMatches(data) {
+      let canonical = data.changeset_canonical;
+      let hash = data.changeset_hash;
+      return digest(hash)
+        && canonical is string
+        && canonical.size() > 0
+        && canonical.size() <= 100000
+        && hashing.sha256(canonical).toHexString().lower() == hash;
+    }
+    function canonicalHash(canonical, hash) {
+      return digest(hash)
+        && canonical is string
+        && canonical.size() > 0
+        && canonical.size() <= 100000
+        && hashing.sha256(canonical).toHexString().lower() == hash;
+    }
+    function resultPayload(data, projectId, workspaceId, uid, taskId) {
+      return data is map
+        && data.keys().hasOnly(['kind', 'project_id', 'workspace_id', 'firebase_uid', 'google_subject', 'task_id', 'scope', 'expires_at', 'events', 'changeset'])
+        && data.keys().size() == 9
+        && ((data.kind == 'history_result'
+          && data.events is list && data.events.size() > 0 && data.events.size() <= 500
+          && data.events[0] is map
+          && data.events[0].keys().hasOnly(['schema_version', 'event_id', 'task_id', 'project_id', 'workspace_id', 'event_type', 'actor_id', 'details', 'resource_versions', 'policy_version', 'occurred_at', 'trace_id'])
+          && data.events[0].keys().size() == 12
+          && data.events[0].schema_version == 1
+          && data.events[0].event_id is string
+          && data.events[0].task_id == data.task_id
+          && data.events[0].project_id == data.project_id
+          && data.events[0].workspace_id == data.workspace_id
+          && data.events[0].details is map
+          && data.events[0].resource_versions is map)
+          || (data.kind == 'changeset_result'
+          && data.changeset is map
+          && data.changeset.keys().hasOnly(['schema_version', 'change_id', 'task_id', 'project_id', 'workspace_id', 'user_id', 'changes', 'resource_versions', 'policy_version', 'trace_id', 'created_at'])
+          && data.changeset.keys().size() == 11
+          && data.changeset.schema_version == 1
+          && boundedId(data.changeset.change_id)
+          && data.changeset.task_id == data.task_id
+          && data.changeset.project_id == data.project_id
+          && data.changeset.workspace_id == data.workspace_id
+          && data.changeset.user_id == data.google_subject
+          && data.changeset.changes is list
+          && data.changeset.changes.size() > 0
+          && data.changeset.changes.size() <= 500
+          && data.changeset.changes[0] is map
+          && data.changeset.resource_versions is map
+          && data.changeset.resource_versions.keys().size() <= 32
+          && data.changeset.policy_version is string
+          && data.changeset.policy_version.size() > 0
+          && data.changeset.policy_version.size() <= 200
+          && data.changeset.trace_id is string
+          && data.changeset.created_at is string))
+        && data.project_id == projectId && data.workspace_id == workspaceId
+        && data.firebase_uid == uid && data.task_id == taskId
+        && boundedId(data.google_subject) && boundedScope(data.scope)
+        && data.expires_at is string && data.expires_at.size() > 0 && data.expires_at.size() <= 100;
+    }
+    function controlRequest(projectId, workspaceId, uid, requestId) {
+      return /databases/$(database)/documents/projects/$(projectId)/workspaces/$(workspaceId)/members/$(uid)/requests/$(requestId);
+    }
+    function approvalDoc(projectId, workspaceId, uid, requestId, approvalId) {
+      return /databases/$(database)/documents/projects/$(projectId)/workspaces/$(workspaceId)/members/$(uid)/requests/$(requestId)/approvals/$(approvalId);
+    }
+    function requestEnvelope(data, projectId, workspaceId, uid, requestId) {
+      return data.keys().hasOnly([
+          'schema_version', 'request_id', 'task_id', 'project_id', 'workspace_id',
+          'user_id', 'firebase_uid', 'google_sub', 'owner_google_subject', 'content',
+          'intent', 'plan', 'download_scopes', 'apply_scopes', 'scope',
+          'resource_versions', 'policy_version', 'trace_id', 'created_at', 'state',
+          'canonical_payload', 'request_hash', 'required_approval', 'approval_id',
+          'required_approvals', 'session_id', 'changeset', 'changeset_canonical', 'changeset_hash',
+          'expires_at_ts'])
+        && data.keys().size() == (data.intent == 'apply' ? 30 : 27)
+        && data.schema_version == 1 && data.request_id == requestId
+        && boundedId(data.request_id) && boundedId(data.task_id)
+        && data.project_id == projectId && data.workspace_id == workspaceId
+        && boundedId(data.project_id) && boundedId(data.workspace_id)
+        && data.firebase_uid == uid && boundedId(data.user_id)
+        && boundedId(data.google_sub) && data.user_id == data.google_sub
+        && data.owner_google_subject == data.google_sub
+        && member(projectId, workspaceId, uid, data.google_sub)
+        && data.content is string && data.content.size() <= 100000
+        && data.intent in ['plan', 'apply'] && data.plan is map
+        && data.download_scopes is list && data.download_scopes.size() <= 20
+        && data.apply_scopes is list && data.apply_scopes.size() <= 20
+        && data.scope is map && data.scope.keys().size() <= 32
+        && data.resource_versions is map && data.resource_versions.keys().size() <= 32
+        && data.policy_version is string && data.policy_version.size() > 0 && data.policy_version.size() <= 200
+        && data.trace_id is string && data.trace_id.size() > 0 && data.trace_id.size() <= 200
+        && data.created_at is string && data.created_at.size() > 0 && data.created_at.size() <= 100
+        && data.state == 'submitted'
+        && requestHashMatches(data)
+        && data.required_approval is string && data.approval_id is string
+        && data.session_id is string && data.session_id.size() > 0 && data.session_id.size() <= 200
+        && data.required_approvals is list
+        && data.required_approvals.size() == (data.intent == 'apply' ? 2 : 1)
+        && data.required_approvals[0] is string
+        && data.approval_id == data.required_approvals[data.intent == 'apply' ? 1 : 0]
+        && nativeTime(data.expires_at_ts) && request.time < data.expires_at_ts
+        && data.expires_at_ts < request.time + duration.value(24, 'h')
+        && ((data.intent == 'plan'
+          && data.required_approval == 'upload_run'
+          && !data.keys().hasAny(['changeset', 'changeset_canonical', 'changeset_hash']))
+          || (data.intent == 'apply'
+          && data.required_approval == 'exact_apply'
+          && data.keys().hasAll(['changeset', 'changeset_canonical', 'changeset_hash'])
+          && data.changeset is map
+          && data.changeset.keys().hasOnly(['schema_version', 'change_id', 'task_id', 'project_id', 'workspace_id', 'user_id', 'changes', 'resource_versions', 'policy_version', 'trace_id', 'created_at'])
+          && data.changeset.keys().size() == 11
+          && data.changeset.schema_version == 1 && boundedId(data.changeset.change_id)
+          && data.changeset.task_id == data.task_id && data.changeset.project_id == projectId
+          && data.changeset.workspace_id == workspaceId && data.changeset.user_id == data.google_sub
+          && data.changeset.changes is list && data.changeset.changes.size() > 0 && data.changeset.changes.size() <= 500
+          && data.changeset.resource_versions is map && data.changeset.resource_versions.keys().size() <= 32
+          && data.changeset.policy_version == data.policy_version
+           && data.changeset.trace_id is string && data.changeset.created_at is string));
+    }
+    function approvalEnvelope(data, projectId, workspaceId, uid, approvalId) {
+      return data.keys().hasOnly([
+          'schema_version', 'approval_id', 'request_id', 'task_id', 'project_id', 'workspace_id',
+          'firebase_uid', 'google_sub', 'approver_firebase_uid', 'approver_google_sub', 'approver_id',
+          'change_hash', 'action_scope', 'resource_versions', 'policy_version', 'trace_id',
+          'approved_at', 'expires_at', 'approval_type', 'bound_digest_kind', 'canonical_payload',
+          'approval_hash', 'descriptor_hash', 'session_id', 'destination', 'approved_at_ts', 'expires_at_ts'])
+        && data.keys().size() == 27
+        && data.schema_version == 1 && data.approval_id == approvalId && boundedId(data.approval_id)
+        && data.approver_firebase_uid == uid && data.approver_google_sub == data.google_sub
+        && data.approver_id == data.google_sub
+        && data.trace_id is string && data.trace_id.size() > 0 && data.trace_id.size() <= 200
+        && data.approved_at is string && data.expires_at is string
+        && hashMatches(data, 'approval_hash', 'canonical_payload') && digest(data.descriptor_hash)
+        && data.destination == 'control' && nativeTime(data.approved_at_ts)
+        && data.approved_at_ts <= request.time
+        && data.approved_at_ts < data.expires_at_ts
+        && data.expires_at_ts < data.approved_at_ts + duration.value(24, 'h');
+    }
+    function approvalMatchesRequest(data, projectId, workspaceId, uid, requestId, approvalId) {
+      let approval = getAfter(approvalDoc(projectId, workspaceId, uid, requestId, approvalId));
+      return !exists(approvalDoc(projectId, workspaceId, uid, requestId, approvalId))
+        && approval.data.approval_id == approvalId
+        && approval.data.request_id == requestId;
+    }
+    function approvalMatchesControl(data, projectId, workspaceId, uid, requestId, approvalId) {
+      let parent = getAfter(controlRequest(projectId, workspaceId, uid, requestId)).data;
+      return !exists(controlRequest(projectId, workspaceId, uid, requestId))
+        && data.request_id == parent.request_id
+        && parent.task_id == data.task_id
+        && parent.project_id == data.project_id
+        && parent.workspace_id == data.workspace_id
+        && parent.firebase_uid == data.firebase_uid
+        && parent.google_sub == data.google_sub
+        && parent.required_approvals.hasAny([approvalId])
+        && parent.scope == data.action_scope
+        && parent.resource_versions == data.resource_versions
+        && parent.policy_version == data.policy_version
+        && parent.session_id == data.session_id
+        && parent.expires_at_ts == data.expires_at_ts
+        && ((parent.intent == 'plan'
+          && data.approval_id == parent.approval_id
+          && data.approval_type == 'upload_run'
+          && data.bound_digest_kind == 'task_request'
+          && data.change_hash == parent.request_hash)
+          || (parent.intent == 'apply'
+          && ((data.approval_id == parent.approval_id
+            && data.approval_type == 'exact_apply'
+            && data.bound_digest_kind == 'changeset'
+             && changesetHashMatches(parent)
+             && data.change_hash == parent.changeset_hash)
+            || (data.approval_id != parent.approval_id
+            && data.approval_type == 'upload_run'
+            && data.bound_digest_kind == 'task_request'
+            && data.change_hash == parent.request_hash))));
+    }
+
+    match /projects/{projectId}/workspaces/{workspaceId}/members/{uid} {
+      allow get: if isControl() && googleIdentity(uid, resource.data.google_sub)
+        && resource.data.firebase_uid == uid && resource.data.project_id == projectId
+        && resource.data.workspace_id == workspaceId && resource.data.status == 'active'
+        && resource.data.expires_at is timestamp && request.time < resource.data.expires_at;
+      allow list, create, update, delete: if false;
+    }
+    match /projects/{projectId}/workspaces/{workspaceId}/members/{uid}/requests/{requestId} {
+      allow get: if isControl() && member(projectId, workspaceId, uid, resource.data.google_sub) && resource.data.request_id == requestId;
+      allow create: if isControl()
+        && requestEnvelope(request.resource.data, projectId, workspaceId, uid, requestId)
+        && approvalMatchesRequest(request.resource.data, projectId, workspaceId, uid, requestId, request.resource.data.required_approvals[0])
+        && (request.resource.data.intent == 'plan'
+          || (request.resource.data.required_approvals[0] != request.resource.data.required_approvals[1]
+            && approvalMatchesRequest(request.resource.data, projectId, workspaceId, uid, requestId, request.resource.data.required_approvals[1])));
+      allow list, update, delete: if false;
+    }
+    match /projects/{projectId}/workspaces/{workspaceId}/members/{uid}/requests/{requestId}/approvals/{approvalId} {
+      allow get: if isControl() && member(projectId, workspaceId, uid, resource.data.google_sub) && resource.data.approval_id == approvalId;
+      allow create: if isControl()
+        && approvalEnvelope(request.resource.data, projectId, workspaceId, uid, approvalId)
+        && approvalMatchesControl(request.resource.data, projectId, workspaceId, uid, requestId, approvalId);
+      allow list, update, delete: if false;
+    }
+    match /projects/{projectId}/workspaces/{workspaceId}/members/{uid}/exports/{exportId} {
+      allow get: if isControl() && member(projectId, workspaceId, uid, resource.data.google_sub) && resource.data.export_id == exportId;
+      allow create: if isControl()
+        && request.resource.data.keys().hasOnly(['schema_version', 'export_id', 'kind', 'project_id', 'workspace_id', 'task_id', 'firebase_uid', 'google_sub', 'owner_google_subject', 'origin', 'session_id', 'event_ids', 'events', 'payload_hash', 'canonical_payload', 'approval_descriptor_hash', 'approval', 'approval_hash', 'expires_at', 'expires_at_ts'])
+        && request.resource.data.keys().size() == 20
+        && request.resource.data.schema_version == 1 && request.resource.data.export_id == exportId && request.resource.data.kind == 'history_upload'
+        && request.resource.data.project_id == projectId && request.resource.data.workspace_id == workspaceId && request.resource.data.firebase_uid == uid
+        && boundedId(request.resource.data.task_id) && boundedId(request.resource.data.google_sub)
+        && request.resource.data.owner_google_subject == request.resource.data.google_sub && request.resource.data.origin == 'local'
+        && request.resource.data.session_id is string && member(projectId, workspaceId, uid, request.resource.data.google_sub)
+        && request.resource.data.event_ids is list && request.resource.data.event_ids.size() > 0 && request.resource.data.event_ids.size() <= 500
+        && request.resource.data.events is list && request.resource.data.events.size() == request.resource.data.event_ids.size() && request.resource.data.events[0] is map
+        && request.resource.data.events[0].keys().hasOnly(['schema_version', 'event_id', 'task_id', 'project_id', 'workspace_id', 'event_type', 'actor_id', 'details', 'resource_versions', 'policy_version', 'occurred_at', 'trace_id'])
+        && request.resource.data.events[0].keys().size() == 12
+        && request.resource.data.events[0].schema_version == 1 && request.resource.data.events[0].event_id == request.resource.data.event_ids[0]
+        && request.resource.data.events[0].task_id == request.resource.data.task_id && request.resource.data.events[0].project_id == projectId
+        && request.resource.data.events[0].workspace_id == workspaceId && request.resource.data.events[0].details is map
+        && request.resource.data.events[0].resource_versions is map && hashMatches(request.resource.data, 'payload_hash', 'canonical_payload')
+        && digest(request.resource.data.approval_descriptor_hash) && request.resource.data.approval is map
+        && request.resource.data.approval.keys().hasOnly(['schema_version', 'approval_id', 'task_id', 'project_id', 'workspace_id', 'change_hash', 'approver_id', 'action_scope', 'resource_versions', 'policy_version', 'trace_id', 'approved_at', 'expires_at', 'canonical_payload', 'descriptor_hash', 'session_id', 'destination', 'approved_at_ts'])
+        && request.resource.data.approval.keys().size() == 18
+        && request.resource.data.approval.schema_version == 1 && request.resource.data.approval.task_id == request.resource.data.task_id
+        && request.resource.data.approval.project_id == projectId && request.resource.data.approval.workspace_id == workspaceId
+        && request.resource.data.approval.change_hash == request.resource.data.payload_hash && request.resource.data.approval.approver_id == request.resource.data.google_sub
+        && request.resource.data.approval.action_scope is map && request.resource.data.approval.resource_versions is map
+        && request.resource.data.expires_at is string && request.resource.data.expires_at.size() > 0 && request.resource.data.expires_at.size() <= 100
+        && request.resource.data.approval.approved_at is string && request.resource.data.approval.approved_at.size() > 0 && request.resource.data.approval.approved_at.size() <= 100
+        && request.resource.data.approval.expires_at is string && request.resource.data.approval.expires_at.size() > 0 && request.resource.data.approval.expires_at.size() <= 100
+        && request.resource.data.approval.expires_at == request.resource.data.expires_at
+        && request.resource.data.approval.canonical_payload is string && request.resource.data.approval.canonical_payload.size() > 0
+        && request.resource.data.approval.canonical_payload.size() <= 100000 && canonicalHash(request.resource.data.approval.canonical_payload, request.resource.data.approval_hash)
+        && request.resource.data.approval.descriptor_hash == request.resource.data.approval_descriptor_hash && request.resource.data.approval.session_id == request.resource.data.session_id
+        && request.resource.data.approval.destination == 'control' && nativeTime(request.resource.data.approval.approved_at_ts)
+        && request.resource.data.approval.approved_at_ts <= request.time
+        && request.resource.data.approval.approved_at_ts < request.resource.data.expires_at_ts
+        && request.resource.data.approval.action_scope.kind == 'history_upload'
+        && request.resource.data.approval.action_scope.event_ids is list
+        && request.resource.data.approval.action_scope.event_ids == request.resource.data.event_ids
+        && nativeTime(request.resource.data.expires_at_ts) && request.time < request.resource.data.expires_at_ts
+        && request.resource.data.expires_at_ts < request.time + duration.value(24, 'h');
+      allow list, update, delete: if false;
+    }
+    match /projects/{projectId}/workspaces/{workspaceId}/users/{uid}/tasks/{taskId}/manifests/latest {
+      allow get: if isRuntime() && member(projectId, workspaceId, uid, resource.data.google_subject)
+        && resource.data.keys().hasOnly(['schema_version', 'kind', 'result_id', 'result_hash', 'scope', 'project_id', 'workspace_id', 'firebase_uid', 'google_subject', 'task_id', 'available', 'expires_at', 'expires_at_ts'])
+        && resource.data.schema_version == 1 && resource.data.kind == 'manifest' && digest(resource.data.result_id) && resource.data.result_id == resource.data.result_hash
+        && resource.data.project_id == projectId && resource.data.workspace_id == workspaceId && resource.data.firebase_uid == uid && resource.data.task_id == taskId
+        && boundedScope(resource.data.scope)
+        && resource.data.available == true && resource.data.expires_at is string && nativeTime(resource.data.expires_at_ts) && request.time < resource.data.expires_at_ts;
+      allow list, create, update, delete: if false;
+    }
+    match /projects/{projectId}/workspaces/{workspaceId}/users/{uid}/tasks/{taskId}/results/{resultId} {
+      allow get: if isRuntime() && resource.data.payload is map && member(projectId, workspaceId, uid, resource.data.payload.google_subject)
+        && resource.data.keys().hasOnly(['schema_version', 'result_id', 'result_hash', 'payload', 'canonical_payload', 'expires_at_ts'])
+        && resource.data.schema_version == 1 && digest(resource.data.result_id) && resource.data.result_id == resultId && resource.data.result_id == resource.data.result_hash
+        && resultPayload(resource.data.payload, projectId, workspaceId, uid, taskId)
+        && hashMatches(resource.data, 'result_hash', 'canonical_payload')
+        && nativeTime(resource.data.expires_at_ts) && request.time < resource.data.expires_at_ts;
+      allow list, create, update, delete: if false;
+    }
+    // No complete raw event envelope is published for this milestone.
+    match /projects/{projectId}/workspaces/{workspaceId}/users/{uid}/tasks/{taskId}/events/{eventId} {
+      allow get, list, create, update, delete: if false;
+    }
+  }
+}

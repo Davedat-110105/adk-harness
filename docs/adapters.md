@@ -1,37 +1,23 @@
-# Adapter cookbook
+# Integration boundary
 
-Implement the frozen `Harness` protocol. Keep vendor imports inside discovery,
-return `available=False` when a dependency is absent, and stream
-`HarnessTurn` values without buffering a session.
+There is one supported coding integration: the official Google Antigravity SDK
+through `adk_harness.integrations.AntigravityIntegration`. It is discovered
+lazily so a package import remains safe when the native runtime is unavailable.
 
-The smallest useful offline matrix covers discovery with and without the
-vendor, text/tool event mapping, and clean close during a stream. Fake the
-subprocess or SDK; live credentials are optional and never required by tests.
-See [examples/README.md](../examples/README.md) for an echo adapter and a
-subprocess outline.
+```python
+import asyncio
 
+from adk_harness import AntigravityIntegration
 
-## Scaffold and register
-
-In a checkout of this repository:
-
-```bash
-adk-harness new-adapter my_harness
-python -m pytest tests/coding/adapters/test_my_harness.py -q
+result = asyncio.run(AntigravityIntegration().discover())
+print(result["available"], result.get("detail", ""))
 ```
 
-The command creates `src/adk_harness/coding/adapters/my_harness.py` and its
-matching offline test, and refuses to overwrite files. It does not edit exports
-or packaging. For an extension in your own package, register a zero-argument
-adapter factory in that package's `pyproject.toml`:
+Workspace applications are built with `adk_harness.build_workspace_app` and
+official ADK Workspace toolsets. They expose only the selected services and
+operations, and every operation passes the policy gate independently.
 
-```toml
-[project.entry-points."adk_harness.adapters"]
-my_harness = "your_package.adapter:MyHarness"
-```
-
-Install the extension in the same Python environment as ADK Harness, then use
-`adk_harness.coding.registry.default_registry()`. An explicit
-`HarnessRegistry([...])` includes only the supplied adapters. An npm/uv-managed
-CLI runs in an isolated environment, so packages installed in a different Python
-environment are not automatically visible to it.
+The old generic adapter protocol and multi-vendor extension cookbook are
+retired. Code written for those APIs must follow the breaking migration note;
+new adapters are not part of this package. Cloud onboarding and remote task
+execution are planned for later milestones.

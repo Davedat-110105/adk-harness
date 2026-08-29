@@ -1,182 +1,73 @@
+import importlib
 import json
-import os
-import shutil
-import subprocess
-import sys
-from pathlib import Path
 
-from adk_harness import setup_cli
-from adk_harness.coding.protocol import HarnessSpec
-from adk_harness.coding.registry import HarnessRegistry
+from adk_harness.cli.main import main
 
 
-def test_dispatch_setup_check(monkeypatch) -> None:
-    monkeypatch.setattr(setup_cli, "_setup", lambda check: 7 if check else 8)
-    assert setup_cli.main(["setup", "--check"]) == 7
-    assert setup_cli.main(["--check"]) == 7
-
-
-def test_no_command_is_help_and_serve_routes_to_mcp(monkeypatch, capsys) -> None:
-    from adk_harness.mcp import server
-
-    def unexpected_setup(check):
-        raise AssertionError("help must not install a plugin")
-
-    calls = []
-    monkeypatch.setattr(setup_cli, "_setup", unexpected_setup)
-    monkeypatch.setattr(server, "main", lambda: calls.append("serve"))
-    assert setup_cli.main([]) == 0
-    assert "serve" in capsys.readouterr().out
-    assert setup_cli.main(["serve"]) == 0
-    assert calls == ["serve"]
-
-
-def test_module_entry_points_preserve_failure_exit_code(tmp_path: Path) -> None:
-    for module in ("adk_harness", "adk_harness.setup_cli"):
-        result = subprocess.run(
-            [sys.executable, "-m", module, "new-adapter", "not-a-python-name"],
-            cwd=tmp_path,
-            capture_output=True,
-            check=False,
-        )
-        assert result.returncode == 2
-
-
-def test_doctor_is_read_only(monkeypatch, capsys) -> None:
-    class Stub:
-        spec = HarnessSpec(id="stub", version="1", available=False, detail="binary not found")
-
-        async def discover(self):
-            return self.spec
-
-    monkeypatch.setattr(setup_cli, "default_registry", lambda: HarnessRegistry([Stub()]))
-    assert setup_cli.main(["doctor"]) == 1
-    assert "missing binary/package" in capsys.readouterr().out
-
-
-def test_doctor_checks_codex_login_without_printing_subprocess_output(monkeypatch, capsys) -> None:
-    class Stub:
-        spec = HarnessSpec(id="codex", version="1", available=True)
-
-        async def discover(self):
-            return self.spec
-
-    calls = []
-
-    def fake_run(*args):
-        calls.append(args)
-        return 0, "Logged in as secret@example.com"
-
-    monkeypatch.setattr(setup_cli, "default_registry", lambda: HarnessRegistry([Stub()]))
-    monkeypatch.setattr(setup_cli, "_run", fake_run)
-    assert setup_cli.main(["doctor"]) == 0
+def test_cli_exposes_auth_commands_without_approval_bypass(monkeypatch, capsys) -> None:
+    cli_module = importlib.import_module("adk_harness.cli.main")
+    monkeypatch.setattr(cli_module, "_auth_status", lambda purpose: {"stored": False})
+    assert main(["status"]) == 0
     output = capsys.readouterr().out
-    assert calls == [("codex", "login", "status")]
-    assert "secret@example.com" not in output
-    assert "ready" in output
+    assert "stored: False" in output
+    assert "approved" not in output.lower()
 
 
-def test_doctor_reports_codex_credentials_missing(monkeypatch, capsys) -> None:
-    class Stub:
-        spec = HarnessSpec(id="codex", version="1", available=True)
-
-        async def discover(self):
-            return self.spec
-
-    monkeypatch.setattr(setup_cli, "default_registry", lambda: HarnessRegistry([Stub()]))
-    monkeypatch.setattr(setup_cli, "_run", lambda *args: (1, "token=secret"))
-    assert setup_cli.main(["doctor"]) == 1
-    output = capsys.readouterr().out
-    assert "credentials missing" in output
-    assert "codex login" in output
-    assert "secret" not in output
+def test_cli_rejects_model_facing_approval_flag() -> None:
+    try:
+        main(["--approved"])
+    except SystemExit as exc:
+        assert exc.code != 0
+    else:
+        raise AssertionError("--approved must not be a supported entrypoint")
 
 
-def test_new_adapter_refuses_existing(tmp_path: Path, monkeypatch) -> None:
-    monkeypatch.chdir(tmp_path)
-    (tmp_path / "src/adk_harness/coding/adapters").mkdir(parents=True)
-    (tmp_path / "src/adk_harness/coding/adapters/existing.py").write_text("x")
-    assert setup_cli.main(["new-adapter", "existing"]) == 2
+def test_status_accepts_explicit_client_config_and_subject_without_environment(
+    monkeypatch, capsys, tmp_path
+) -> None:
+    config = tmp_path / "client.json"
+    config.write_text(json.dumps({"installed": {"client_id": "client-id"}}), encoding="utf-8")
+    cli_module = importlib.import_module("adk_harness.cli.main")
+    seen: list[tuple[object, str | None, str | None]] = []
 
+    def status(purpose, *, client_config=None, subject=None):
+        seen.append((purpose, client_config, subject))
+        return {"stored": False, "authenticated": False}
 
-def test_new_adapter_rejects_invalid_names(tmp_path: Path, monkeypatch) -> None:
-    monkeypatch.chdir(tmp_path)
-    for name in ("Class", "class", "has-dash", "écho"):
-        assert setup_cli.main(["new-adapter", name]) == 2
-
-
-def test_new_adapter_rejects_symlinked_ancestor(tmp_path: Path, monkeypatch) -> None:
-    monkeypatch.chdir(tmp_path)
-    outside = tmp_path / "outside"
-    outside.mkdir()
-    (tmp_path / "src").symlink_to(outside, target_is_directory=True)
-    assert setup_cli.main(["new-adapter", "escape"]) == 2
-    assert not (outside / "adk_harness").exists()
-
-
-def test_new_adapter_generates_runnable_check(tmp_path: Path, monkeypatch) -> None:
-    monkeypatch.chdir(tmp_path)
-    (tmp_path / "src/adk_harness/coding/adapters").mkdir(parents=True)
-    (tmp_path / "src/adk_harness/__init__.py").write_text("")
-    (tmp_path / "src/adk_harness/coding/adapters/__init__.py").write_text("")
-    shutil.copyfile(
-        Path(__file__).parents[2] / "src/adk_harness/coding/protocol.py",
-        tmp_path / "src/adk_harness/coding/protocol.py",
+    monkeypatch.delenv("ADK_HARNESS_GOOGLE_CLIENT_CONFIG", raising=False)
+    monkeypatch.setattr(cli_module, "_auth_status", status)
+    assert (
+        main(["status", "--client-config", str(config), "--subject", "google-sub-1"])
+        == 0
     )
-    assert setup_cli.main(["new-adapter", "offline_echo"]) == 0
-    env = {**os.environ, "PYTHONPATH": str(tmp_path / "src")}
-    result = subprocess.run(
-        [sys.executable, "-m", "pytest", "tests/coding/adapters/test_offline_echo.py", "-q"],
-        cwd=tmp_path,
-        env=env,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    assert result.returncode == 0, result.stdout + result.stderr
+    capsys.readouterr()
+    assert len(seen) == 2
+    assert all(path == str(config) and subject == "google-sub-1" for _, path, subject in seen)
 
 
-def test_install_plugin_preserves_previous_copy_as_backup(tmp_path: Path, monkeypatch) -> None:
-    source = tmp_path / "source"
-    source.mkdir()
-    (source / "plugin.json").write_text("{}")
-    (source / "mcp_config.json").write_text(
-        '{"mcpServers":{"adk-harness":{"command":"old","env":{"ADK_PRECEDENTS":"old"}}}}'
-    )
-    target = tmp_path / "installed"
-    target.mkdir()
-    (target / "old.txt").write_text("keep")
-    monkeypatch.setattr(setup_cli, "_plugin_source", lambda: source)
-    monkeypatch.setattr(setup_cli, "PLUGIN_DIR", target)
-    assert setup_cli._install_plugin()[0] is True
-    assert (target.with_name("installed.backup") / "old.txt").read_text() == "keep"
-    data = json.loads((target / "mcp_config.json").read_text())
-    assert data["mcpServers"]["adk-harness"]["env"].get("ADK_PRECEDENTS") is None
-
-    rollback_target = tmp_path / "rollback"
-    rollback_target.mkdir()
-    (rollback_target / "old.txt").write_text("keep")
-    monkeypatch.setattr(setup_cli, "PLUGIN_DIR", rollback_target)
-    original_rename = Path.rename
-
-    def fail_final_rename(path, destination):
-        if path.name.startswith(".rollback-"):
-            raise OSError("simulated replacement failure")
-        return original_rename(path, destination)
-
-    monkeypatch.setattr(Path, "rename", fail_final_rename)
-    assert setup_cli._install_plugin()[0] is False
-    assert (rollback_target / "old.txt").read_text() == "keep"
-    assert not rollback_target.with_name("rollback.backup").exists()
+def test_cli_rejects_retired_commands() -> None:
+    try:
+        main(["serve"])
+    except SystemExit as exc:
+        assert exc.code != 0
+    else:
+        raise AssertionError("serve must not be a supported entrypoint")
 
 
-def test_install_plugin_refuses_existing_backup(tmp_path: Path, monkeypatch) -> None:
-    source = tmp_path / "source"
-    source.mkdir()
-    (source / "plugin.json").write_text("{}")
-    target = tmp_path / "installed"
-    (target.with_name("installed.backup")).mkdir()
-    monkeypatch.setattr(setup_cli, "_plugin_source", lambda: source)
-    monkeypatch.setattr(setup_cli, "PLUGIN_DIR", target)
-    ok, detail = setup_cli._install_plugin()
-    assert not ok and "backup already exists" in detail
+def test_install_plugin_copies_packaged_assets(tmp_path, capsys) -> None:
+    destination = tmp_path / "plugins" / "adk-harness"
+    assert main(["install-plugin", "--plugin-dir", str(destination)]) == 0
+    assert (destination / "plugin.json").is_file()
+    assert (destination / "skills" / "governed-workspace" / "SKILL.md").is_file()
+    assert (destination / "rules" / "governance.md").is_file()
+    assert str(destination) in capsys.readouterr().out
+
+
+def test_install_plugin_replaces_an_existing_installation(tmp_path) -> None:
+    destination = tmp_path / "adk-harness"
+    destination.mkdir()
+    stale = destination / "mcp_config.json"
+    stale.write_text("{}", encoding="utf-8")
+    assert main(["install-plugin", "--plugin-dir", str(destination)]) == 0
+    assert not stale.exists()
+    assert (destination / "plugin.json").is_file()

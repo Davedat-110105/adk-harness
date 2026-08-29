@@ -1,82 +1,46 @@
 # Getting started
 
-For the npm launcher, install Git, npm, and [uv](https://docs.astral.sh/uv/getting-started/installation/).
-uv manages its own Python runtime. For the Python example below, also use
-Python 3.12+ in a virtual environment.
+The supported package surface is a local Google Antigravity integration. Install
+the native package with npm, or install the Python package directly:
 
 ```bash
-mkdir -p .adk-harness-sandbox
 npm install -g github:Davedat-110105/adk-harness
-npm install -g @openai/codex
-codex login
 adk-harness --help
 adk-harness doctor
-```
 
-The npm launcher is isolated from your Python environment. Install the library
-in your Python 3.12+ virtual environment before running this example:
-
-```bash
+# Python installation
 python -m pip install 'adk-harness @ git+https://github.com/Davedat-110105/adk-harness.git'
 ```
 
-For the Gemini orchestrator, configure an existing Google Cloud project with
-billing and the Vertex AI API enabled. This example makes paid model calls;
-it does not deploy anything. Codex login and Google authentication are separate.
+The npm launcher uses `uv` to create an isolated Python 3.12 tool environment.
+It passes arguments as an argument vector and does not install dependencies
+into the caller's Python environment. The Python package includes the official
+Google ADK, Antigravity, authentication, and Workspace client dependencies.
 
-```bash
-gcloud auth application-default login
-export GOOGLE_CLOUD_PROJECT=YOUR_PROJECT_ID
-export GOOGLE_CLOUD_LOCATION=global
-export GOOGLE_GENAI_USE_ENTERPRISE=true
-```
+Run `adk-harness install-plugin` to copy the packaged rules and skill into
+`~/.gemini/config/plugins/adk-harness`. Antigravity reads that directory on
+start and lists the plugin under Settings, Customizations.
 
-Save this as `first_fleet.py`, then run `python first_fleet.py` from the
-directory where you created `.adk-harness-sandbox`. No repository clone is required. It uses
-only Codex and a path scoped to the disposable directory:
+`adk-harness doctor` reports whether the installed Antigravity SDK is available.
+It is a local diagnostic: it does not authenticate, call a model, create cloud
+resources, or transfer task data.
 
-```python
-import asyncio
-from pathlib import Path
+For a local Workspace application, configure credentials through Google's
+supported tooling and explicitly choose the Workspace scopes you need. Then
+adapt the shipped example at `examples/agents/workspace/agent.py` for your own
+policy and service allowlist. A Workspace write is held until a trusted host
+records an approval; sending mail and changing sharing permissions are refused.
 
-from adk_harness import HarnessRegistry, build_fleet
-from adk_harness.coding.adapters import CodexHarness
-from coactra import Decision, DecisionOutcome, PolicyRequest, Scope
-from google.adk.runners import Runner
-from google.adk.sessions import InMemorySessionService
-from google.genai import types
+The immutable `TaskRequest`, `ChangeSet`, `Approval`, and `ActivityEvent`
+records bind identity, scope, policy version, resource versions, timestamps,
+and content hashes. They describe intent and evidence; they never grant
+permission.
 
-SANDBOX = (Path.cwd() / ".adk-harness-sandbox").resolve()
+## Trusted onboarding and workflow UI
 
-class SandboxPolicy:
-    async def check(self, request: PolicyRequest) -> Decision:
-        cwd = Path(str(request.context.get("cwd") or ".")).resolve()
-        outcome = DecisionOutcome.allow if SANDBOX in (cwd, *cwd.parents) else DecisionOutcome.deny
-        return Decision(outcome=outcome, reason="scoped disposable sandbox", source="example")
-
-async def main() -> None:
-    fleet = await build_fleet(
-        registry=HarnessRegistry([CodexHarness()]),
-        policy=SandboxPolicy(),
-        scope=Scope(tenant_id="example", namespace="first-fleet"),
-        cwd=str(SANDBOX),
-    )
-    print("available:", fleet.available_ids)
-    service = InMemorySessionService()
-    runner = Runner(app=fleet.app, session_service=service)
-    await service.create_session(app_name=fleet.app.name, user_id="u", session_id="s")
-    message = types.Content(role="user", parts=[types.Part(
-        text="List the files here; do not edit anything or run destructive commands."
-    )])
-    async for event in runner.run_async(user_id="u", session_id="s", new_message=message):
-        if event.content and event.content.parts:
-            for part in event.content.parts:
-                if part.text:
-                    print(part.text)
-
-asyncio.run(main())
-```
-
-The prompt asks for a read only operation, but the Codex sandbox and permissions
-remain responsible for its inner commands. A prompt is not a security boundary.
-Held actions have not run; only a trusted host can record a human answer.
+After provisioning login, launch `adk-harness onboard`. With a trusted workflow
+configuration and SQLite outbox, pass `--workflow-config` and `--outbox`; the
+browser then owns Firebase Lite calls and shows exact hashes, scopes, and
+destinations before each consent. Unknown operations survive restart and can
+only be reconciled after a new bounded read consent. Cloud deployment and live
+Workspace proof remain separately authorized.

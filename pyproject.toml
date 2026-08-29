@@ -5,52 +5,120 @@ build-backend = "hatchling.build"
 [project]
 name = "adk-harness"
 version = "0.1.0"
-description = "Turn any coding-agent harness into a governed Google ADK agent."
+description = "Governed Google ADK Workspace applications for the official Antigravity integration."
 readme = "README.md"
 requires-python = ">=3.12"
 license = { text = "MIT" }
-keywords = ["adk", "gemini", "agents", "claude-code", "codex", "opencode", "antigravity"]
+keywords = ["adk", "gemini", "agents", "antigravity", "workspace"]
 dependencies = [
-    "google-adk[db,mcp]>=2.7,<3",
+    "google-adk==2.7.1",
+    "google-antigravity==0.1.14",
+    "google-auth==2.57.0",
+    "google-auth-oauthlib==1.4.1",
+    "google-cloud-firestore==2.29.0",
+    "google-cloud-resource-manager==1.18.0",
+    "google-cloud-billing==1.20.0",
+    "google-api-python-client==2.199.0",
+    "google-cloud-service-usage==1.17.0",
+    "google-cloud-run==0.16.1",
+    "google-cloud-eventarc==1.21.0",
+    "google-cloud-secret-manager==2.30.0",
+    "google-events==0.14.0",
+    "functions-framework==3.10.2",
+    "keyring==25.7.0",
+    "opentelemetry-exporter-gcp-trace==1.15.0",
     # Coactra is pre-1.0; widen this bound only after compatibility testing.
-    "coactra>=0.7.0,<0.8",
+    "coactra==0.7.0",
+    "rfc8785==0.1.4",
 ]
 
 [project.scripts]
 adk-harness = "adk_harness.cli.main:main"
 
 [project.optional-dependencies]
-claude-code = ["claude-agent-sdk>=0.2,<1"]
-opencode = ["httpx>=0.27"]
-# Optional API clients; base imports must work without them.
-google-workspace = ["google-api-python-client>=2.100", "google-auth>=2.30"]
-ledger = ["google-cloud-firestore>=2.16"]
-# The SDK bundles a platform runtime; minor upgrades need compatibility testing.
-antigravity = ["google-antigravity>=0.1.14,<0.2"]
-a2a = ["google-adk[a2a]>=2.7,<3"]
-# Required for ADK --trace_to_cloud without its broad all extra.
-tracing = ["opentelemetry-exporter-gcp-trace>=1.9,<2"]
-# All runtime integrations; developer tooling remains a separate opt-in.
-all = ["adk-harness[claude-code,opencode,antigravity,google-workspace,ledger,a2a,tracing]"]
-dev = ["pytest>=8", "pytest-asyncio>=0.23", "ruff>=0.8", "pyright>=1.1"]
+# Runtime integrations are part of the supported base package. Keep developer
+# tooling opt-in so production installs do not pull test and lint dependencies.
+dev = [
+    "pytest>=8",
+    "pytest-asyncio>=0.23",
+    "ruff>=0.8",
+    "pyright>=1.1",
+    "hatchling==1.32.0",
+]
 
 [tool.hatch.build]
-exclude = ["**/.env", "**/.env.*", "**/.adk/**", "**/*.db", "**/*.db-*", "**/__pycache__/**"]
+exclude = [
+    # The dev copy of the generated bundle; the wheel takes it from ui/approval.
+    "src/adk_harness/ui/approval/dist/**",
+    "**/.env",
+    "**/.env.*",
+    "**/.adk/**",
+    "**/*.db",
+    "**/*.db-*",
+    "**/*.sqlite",
+    "**/*.sqlite3",
+    "**/*.sqlite-*",
+    "**/*.sqlite3-*",
+    "**/*.tfstate",
+    "**/*.tfstate.*",
+    "**/*.tfplan",
+    "**/*.tfvars",
+    "**/.terraform/**",
+    "**/__pycache__/**",
+    "**/credentials.json",
+    "credentials.json",
+    "**/client_secret*.json",
+    "client_secret*.json",
+    "**/token.json",
+    "token.json",
+    "**/application_default_credentials.json",
+    "application_default_credentials.json",
+    "**/service-account*.json",
+    "service-account*.json",
+    "**/service_account*.json",
+    "service_account*.json",
+    "**/.credentials/**",
+    ".credentials/**",
+    "**/credentials/**",
+    "credentials/**",
+    "**/.tokens/**",
+    ".tokens/**",
+    "**/tokens/**",
+    "tokens/**",
+    "**/.config/gcloud/**",
+    ".config/gcloud/**",
+]
 
 [tool.hatch.build.targets.sdist]
 include = [
-    "/src", "/plugins", "/tests", "/examples", "/docs", "/bin",
-    "/.agents/plugins/marketplace.json", "/.npmignore", "/package.json",
+    "/src", "/tests", "/examples", "/docs", "/bin",
+    "/plugins/antigravity",
+    "/infra/gcp",
+    "/ui/approval/index.html", "/ui/approval/src", "/ui/approval/dist",
+    "/.npmignore", "/package.json", "/uv.lock",
     "/README.md", "/LICENSE", "/pyproject.toml",
 ]
 
+[tool.hatch.build.targets.sdist.force-include]
+# The generated browser bundle is gitignored in the working tree but is a
+# required native asset in the source distribution.
+"ui/approval/dist/main.js" = "ui/approval/dist/main.js"
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/adk_harness"]
-# Bundle the plugin for setup without a repository checkout.
-force-include = { "plugins/antigravity" = "adk_harness/plugins/antigravity" }
+
+[tool.hatch.build.targets.wheel.force-include]
+"plugins/antigravity/plugin.json" = "adk_harness/plugins/antigravity/plugin.json"
+"plugins/antigravity/README.md" = "adk_harness/plugins/antigravity/README.md"
+"plugins/antigravity/rules/governance.md" = "adk_harness/plugins/antigravity/rules/governance.md"
+"plugins/antigravity/skills/governed-workspace/SKILL.md" = "adk_harness/plugins/antigravity/skills/governed-workspace/SKILL.md"
+"ui/approval/dist/main.js" = "adk_harness/ui/approval/dist/main.js"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+# tests/installation imports the sibling checker, so the repository root must
+# be importable under a bare `pytest` invocation.
+pythonpath = ["."]
 
 [tool.ruff]
 target-version = "py312"
@@ -63,7 +131,7 @@ ignore = [
     "PLC0415",
     "PLR0911",  # several early returns is how the policy gate reads best
     "PLR0912",  # the vendor-event mapping is a wide branch by nature
-    "PLR0913",  # build_fleet genuinely has many keyword arguments
+    "PLR0913",
     "PLR2004",  # comparing against literals is the point of a test
 ]
 
@@ -76,7 +144,7 @@ pythonVersion = "3.12"
 
 [tool.ruff.lint.per-file-ignores]
 # Preserve long vendor payload lines.
-"src/adk_harness/coding/adapters/codex.py" = ["E501"]
-"tests/coding/adapters/test_codex.py" = ["E501"]
-"tests/coding/adapters/test_claude_code.py" = ["E501"]
-"src/adk_harness/coding/adapters/antigravity.py" = ["E501"]
+"src/adk_harness/integrations/antigravity.py" = ["E501"]
+# Readiness diagnostics retain long SDK resource paths and approved field sets.
+"src/adk_harness/cloud/readiness.py" = ["E501"]
+"tests/cloud/test_readiness.py" = ["E501"]

@@ -1,149 +1,167 @@
-from __future__ import annotations
-
 import json
 import os
 import shutil
-import stat
 import subprocess
 from pathlib import Path
+from textwrap import dedent
 
 import pytest
 
 ROOT = Path(__file__).parents[2]
-LAUNCHER = ROOT / "bin" / "adk-harness.js"
 
 
-def test_npm_pack_contains_launcher_and_python_sources(tmp_path: Path) -> None:
-    result = subprocess.run(
-        ["npm", "pack", "--json", "--dry-run"],
-        cwd=ROOT,
-        check=True,
-        capture_output=True,
-        text=True,
-    )
-    files = {entry["path"] for entry in json.loads(result.stdout)[0]["files"]}
-    assert "bin/adk-harness.js" in files
-    assert "pyproject.toml" in files
-    assert "src/adk_harness/__init__.py" in files
-    assert "plugins/antigravity/plugin.json" in files
-    assert "plugins/adk-harness/.codex-plugin/plugin.json" in files
-    assert "plugins/adk-harness/.mcp.json" in files
-    assert not any("__pycache__" in path for path in files)
+def _npm_argv(*arguments: str) -> list[str]:
+    """Invoke npm through node so Windows never needs a shell."""
+    if os.name != "nt":
+        return ["npm", *arguments]
+    node = shutil.which("node.exe") or shutil.which("node")
+    if node is None:
+        pytest.skip("node is required for package installation test")
+    npm_wrapper = shutil.which("npm.cmd") or shutil.which("npm")
+    if npm_wrapper is None:
+        pytest.skip("npm is required for package installation test")
+    npm_cli = Path(npm_wrapper).resolve().parent / "node_modules" / "npm" / "bin" / "npm-cli.js"
+    if not npm_cli.is_file():
+        pytest.skip("npm-cli.js is required for package installation test")
+    return [node, str(npm_cli), *arguments]
 
 
-def test_launcher_passes_project_and_arguments_to_uv(tmp_path: Path) -> None:
-    capture = tmp_path / "args"
-    fake_uv = tmp_path / "uv"
-    fake_uv.write_text(
-        "#!/bin/sh\nprintf '%s\\n' \"$@\" > \"$CAPTURE\"\n"
-        "printf '%s\\n' \"$PWD\" > \"$CWD_CAPTURE\"\nexit 17\n",
+def test_npm_manifest_exposes_supported_local_launcher() -> None:
+    manifest = json.loads((ROOT / "package.json").read_text(encoding="utf-8"))
+    assert manifest["bin"]["adk-harness"] == "bin/adk-harness.js"
+    assert "infra/gcp/main.tf" in manifest["files"]
+    assert (ROOT / "infra" / "gcp" / "main.tf").is_file()
+    assert (ROOT / "bin" / "adk-harness.js").is_file()
+    assert not (ROOT / "plugins" / "adk-harness").exists()
+
+
+def _run_launcher_with_stub(
+    launcher: Path, tmp_path: Path, *arguments: str
+) -> subprocess.CompletedProcess[str]:
+    """Load the real launcher while replacing only its child-process boundary."""
+    capture = tmp_path / "spawn.json"
+    wrapper = tmp_path / "wrapper.js"
+    capture_json = json.dumps(str(capture))
+    launcher_json = json.dumps(str(launcher))
+    wrapper.write_text(
+        dedent(
+            f"""
+            const fs = require('node:fs');
+            const childProcess = require('node:child_process');
+            childProcess.spawnSync = (command, args, options) => {{
+              fs.writeFileSync({capture_json}, JSON.stringify({{command, args, options}}));
+              return {{status: 23}};
+            }};
+            process.argv = ['node', {launcher_json}, ...process.argv.slice(2)];
+            require({launcher_json});
+            """
+        ),
         encoding="utf-8",
     )
-    fake_uv.chmod(fake_uv.stat().st_mode | stat.S_IXUSR)
-    cwd_capture = tmp_path / "cwd"
-    caller_cwd = tmp_path / "caller"
-    caller_cwd.mkdir()
-    env = {
-        **os.environ,
-        "PATH": f"{tmp_path}:{os.environ['PATH']}",
-        "CAPTURE": str(capture),
-        "CWD_CAPTURE": str(cwd_capture),
-    }
-
-    result = subprocess.run(
-        ["node", str(LAUNCHER), "doctor", "--help"],
-        cwd=caller_cwd,
-        env=env,
-        check=False,
+    return subprocess.run(
+        ["node", str(wrapper), *arguments],
+        cwd=tmp_path,
         capture_output=True,
         text=True,
+        timeout=10,
+        check=False,
     )
 
-    assert result.returncode == 17
-    args = capture.read_text(encoding="utf-8").splitlines()
-    assert args[:7] == [
+
+def test_launcher_uses_safe_argv_and_preserves_cwd(tmp_path: Path) -> None:
+    launcher = ROOT / "bin" / "adk-harness.js"
+    result = _run_launcher_with_stub(launcher, tmp_path, "an argument; &", "folder with spaces")
+
+    assert result.returncode == 23
+    invocation = json.loads((tmp_path / "spawn.json").read_text(encoding="utf-8"))
+    assert invocation["args"] == [
         "tool",
         "run",
         "--python",
         "3.12",
         "--from",
-        f"{ROOT}[google-workspace]",
+        str(ROOT),
         "adk-harness",
+        "an argument; &",
+        "folder with spaces",
     ]
-    assert args[7:] == ["doctor", "--help"]
-    assert cwd_capture.read_text(encoding="utf-8").strip() == str(caller_cwd)
+    assert invocation["options"]["cwd"] == str(tmp_path)
+    assert invocation["options"]["shell"] is False
 
 
-def test_launcher_gives_actionable_message_when_uv_is_missing(tmp_path: Path) -> None:
-    node = Path(shutil.which("node") or "/usr/bin/node")
-    node_link = tmp_path / "node"
-    node_link.symlink_to(node)
-    env = {**os.environ, "PATH": str(tmp_path)}
+def test_launcher_reports_missing_uv(tmp_path: Path) -> None:
+    launcher = ROOT / "bin" / "adk-harness.js"
+    wrapper = tmp_path / "missing-uv-wrapper.js"
+    launcher_json = json.dumps(str(launcher))
+    wrapper.write_text(
+        dedent(
+            f"""
+            const childProcess = require('node:child_process');
+            childProcess.spawnSync = () => ({{ error: Object.assign(
+              new Error('missing'), {{ code: 'ENOENT' }}
+            ) }});
+            require({launcher_json});
+            """
+        ),
+        encoding="utf-8",
+    )
     result = subprocess.run(
-        [str(node_link), str(LAUNCHER), "--help"],
-        cwd=ROOT,
-        env=env,
-        check=False,
+        ["node", str(wrapper)],
+        cwd=tmp_path,
         capture_output=True,
         text=True,
+        timeout=10,
+        check=False,
     )
 
     assert result.returncode == 1
-    assert "needs uv" in result.stderr
-    assert "docs.astral.sh/uv" in result.stderr
-
-
-def test_packed_tarball_installs_in_a_temporary_prefix(tmp_path: Path) -> None:
-    destination = tmp_path / "tarball"
-    destination.mkdir()
-    packed = json.loads(
-        subprocess.run(
-            ["npm", "pack", "--json", f"--pack-destination={destination}"],
-            cwd=ROOT,
-            check=True,
-            capture_output=True,
-            text=True,
-        ).stdout
-    )[0]["filename"]
-    prefix = tmp_path / "prefix"
-    subprocess.run(
-        ["npm", "install", "--global", "--prefix", str(prefix), str(destination / packed)],
-        check=True,
-        capture_output=True,
-        text=True,
-    )
-    assert (prefix / "lib/node_modules/adk-harness/bin/adk-harness.js").is_file()
+    assert "adk-harness needs uv" in result.stderr
 
 
 @pytest.mark.skipif(
-    os.getenv("ADK_HARNESS_INSTALL_TEST") != "1", reason="opt-in: resolves runtime downloads"
+    shutil.which("npm") is None, reason="npm is required for package installation test"
 )
-def test_installed_launcher_help_with_real_uv(tmp_path: Path) -> None:
-    destination = tmp_path / "tarball"
-    destination.mkdir()
-    packed = json.loads(
-        subprocess.run(
-            ["npm", "pack", "--json", f"--pack-destination={destination}"],
-            cwd=ROOT,
-            check=True,
-            capture_output=True,
-            text=True,
-        ).stdout
-    )[0]["filename"]
+def test_packed_npm_install_exposes_executable(tmp_path: Path) -> None:
+    package_dir = tmp_path / "package"
     prefix = tmp_path / "prefix"
+    package_dir.mkdir()
     subprocess.run(
-        ["npm", "install", "--global", "--prefix", str(prefix), str(destination / packed)],
+        _npm_argv(
+            "pack",
+            "--pack-destination",
+            str(package_dir),
+            "--ignore-scripts",
+            "--no-audit",
+            "--no-fund",
+        ),
+        cwd=ROOT,
         check=True,
+        timeout=30,
         capture_output=True,
         text=True,
     )
-    result = subprocess.run(
-        [str(prefix / "bin/adk-harness"), "serve", "--help"],
-        cwd=tmp_path,
+    tarball = next(package_dir.glob("adk-harness-*.tgz"))
+    subprocess.run(
+        _npm_argv(
+            "install",
+            "--offline",
+            "--ignore-scripts",
+            "--no-audit",
+            "--no-fund",
+            "--prefix",
+            str(prefix),
+            str(tarball),
+        ),
         check=True,
+        timeout=30,
         capture_output=True,
         text=True,
-        timeout=120,
     )
-    assert "usage" in result.stdout.lower()
-    assert "serve" in result.stdout.lower()
+    installed = prefix / "node_modules" / "adk-harness" / "bin" / "adk-harness.js"
+    assert installed.is_file()
+
+    result = _run_launcher_with_stub(installed, tmp_path, "--help")
+    assert result.returncode == 23
+    invocation = json.loads((tmp_path / "spawn.json").read_text(encoding="utf-8"))
+    from_index = invocation["args"].index("--from")
+    assert invocation["args"][from_index + 1] == str(installed.parent.parent.resolve())
