@@ -1,18 +1,37 @@
-"""Governed Google Workspace application."""
+"""Governed, per-user Google Workspace application."""
 
 from .app import (
+    APPLICATION_SCOPES,
+    READ_OPERATIONS,
     SCOPES,
-    TOOLSETS,
     WorkspaceApp,
-    WorkspaceFleet,
+    WorkspaceConnection,
+    WorkspaceConsent,
     build_workspace_app,
-    build_workspace_fleet,
     check_workspace_service_access,
-    usable_services,
+)
+from .connections import (
+    CredentialReference,
+    WorkspaceConnectionError,
+    WorkspaceDenied,
+    WorkspaceStale,
+    WorkspaceUnknownOutcome,
+    WorkspaceUnsupported,
 )
 
 __all__ = [
-    "SCOPES", "TOOLSETS", "WorkspaceApp", "WorkspaceFleet",
-    "build_workspace_app", "build_workspace_fleet",
-    "check_workspace_service_access", "usable_services",
+    "APPLICATION_SCOPES",
+    "READ_OPERATIONS",
+    "SCOPES",
+    "CredentialReference",
+    "WorkspaceApp",
+    "WorkspaceConnection",
+    "WorkspaceConnectionError",
+    "WorkspaceConsent",
+    "WorkspaceDenied",
+    "WorkspaceStale",
+    "WorkspaceUnknownOutcome",
+    "WorkspaceUnsupported",
+    "build_workspace_app",
+    "check_workspace_service_access",
 ]

@@ -1,18 +1,21 @@
-# Where this can go: services, architecture, and what to build next
+# Where this can go: future services and architecture
 
-## Current implementation (audit remediation, 2026-08-27)
+The current package is an Antigravity only local integration. The implementation
+summary and command examples below describe earlier repository states unless a
+section explicitly says otherwise; they are retained as historical planning
+evidence, not supported Phase 1 behavior.
 
-- Four coding harness adapters exist. Dispatch is governed; their inner vendor
-  operations are not individually mediated by this library.
-- `WorkspaceApp` uses official Calendar, Gmail, Docs and Sheets toolsets. Each
-  exposed operation is gated; credentials and tool filters determine availability.
-- SQLite precedent persistence, optional Firestore action records and local
-  content screening exist. Local screening is not Google Cloud Model Armor.
-- MCP cannot create approvals. Trusted host code owns that authority, and the
-  server does not automatically load the old model-writable precedent database.
-- Durable workflow resumption, per-user OAuth, managed Model Armor and a full
-  control plane remain outside this implementation. No deployment or live API
-  validation was performed in this remediation pass.
+## Phase 1 current status
+
+- The supported product is a local Antigravity integration using official Google
+  ADK Workspace toolsets for selected Calendar, Gmail draft, Docs, and Sheets
+  operations.
+- Each exposed operation passes the local policy gate. Versioned workflow
+  records bind identity, scope, policy version, resource versions, timestamps,
+  and content hashes; approvals do not grant permission.
+- Cloud onboarding, per-user OAuth, remote execution, and approved history or
+  artifact transfer are future milestones. No deployment or live API validation
+  is claimed by this package.
 
 The notes below collect earlier planning and later updates from August 25–27.
 Their time estimates, deployment health, test counts, and statements that

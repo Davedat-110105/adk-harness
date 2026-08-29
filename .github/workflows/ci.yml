@@ -24,7 +24,7 @@ jobs:
           node-version: "22"
       - name: Build both distributions and check contents
         run: |
-          python -m pip install build pytest pytest-asyncio uv
+          python -m pip install build pytest pytest-asyncio uv "hatchling==1.32.0"
           python -m build
           python tests/check_distribution.py dist/*
       - name: Install the wheel and check the bundled plugin outside the checkout
@@ -32,22 +32,26 @@ jobs:
           python -m pip install dist/*.whl
           cd "$(mktemp -d)"
           python - <<'PY'
-          from mcp.server.fastmcp import FastMCP
-          from adk_harness.cli.main import _plugin_source, main
-          source = _plugin_source()
-          assert source is not None and (source / "mcp_config.json").is_file()
-          print("wheel-plugin-and-mcp-ok")
+          from importlib.resources import files
+          import adk_harness
+          plugin = files("adk_harness").joinpath("plugins/antigravity/plugin.json")
+          assert plugin.is_file()
+          assert adk_harness.AntigravityIntegration
+          print("wheel-native-assets-ok")
           PY
-          adk-harness setup --help
+          adk-harness --help
           adk-harness doctor --help
-      - name: Verify packed npm install and MCP transport
-        env:
-          ADK_HARNESS_INSTALL_TEST: "1"
+      - name: Verify packed npm install and launcher behavior
         run: python -m pytest tests/installation -q
 
-  # Keep vendor extras absent to test graceful discovery failures.
+      - name: Build and test approval UI
+        run: |
+          npm ci --prefix ui/approval
+          npm run build --prefix ui/approval
+          npm test --prefix ui/approval -- --run
+
   base-install:
-    name: Base install, no harness present
+    name: Base install and retired surface check
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -62,28 +66,14 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install .
 
-      - name: Importing an adapter must not require its vendor
+      - name: Import the supported package from a clean installation
         run: |
           python - <<'PY'
-          import asyncio
-
-          from adk_harness.coding.adapters import (
-              AntigravityHarness,
-              ClaudeCodeHarness,
-              CodexHarness,
-          )
-
-          async def main() -> None:
-              for harness in (CodexHarness(), ClaudeCodeHarness(), AntigravityHarness()):
-                  spec = await harness.discover()
-                  assert spec.available is False, f"{spec.id} should be absent on a runner"
-                  assert spec.detail, f"{spec.id} must say why it is unavailable"
-                  print(f"{spec.id}: unavailable, detail={spec.detail!r}")
-
-          asyncio.run(main())
-          print("degrades-cleanly-ok")
+          import adk_harness
+          assert adk_harness.TaskRequest
+          assert adk_harness.AntigravityIntegration
+          print("supported-imports-ok")
           PY
-        continue-on-error: false
 
   tests:
     name: Tests (Python ${{ matrix.python-version }})
@@ -105,10 +95,10 @@ jobs:
         with:
           node-version: "22"
 
-      - name: Install with dev and all extras
+      - name: Install with development tools
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -e ".[dev,all,tracing]"
+          python -m pip install -e ".[dev]"
 
       # Live tests require credentials and explicit opt-in.
       - name: Run the offline suite
@@ -118,7 +108,7 @@ jobs:
         if: always()
         run: |
           echo "Live Vertex tests are skipped in CI (ADK_HARNESS_LIVE unset)." >> "$GITHUB_STEP_SUMMARY"
-          echo "Live model and Workspace checks require separate credentials and explicit opt-in." >> "$GITHUB_STEP_SUMMARY"
+          echo "Cloud deployment, popup auth, Eventarc provenance, IAM, and Workspace outcomes remain separately authorized live proof; no paid calls run in CI." >> "$GITHUB_STEP_SUMMARY"
 
   lint:
     name: Lint and types
@@ -134,10 +124,10 @@ jobs:
       - name: Install
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -e ".[dev,all,tracing]"
+          python -m pip install -e ".[dev]"
 
       - name: Ruff
-        run: ruff check src tests
+        run: ruff check src tests examples
 
       - name: Pyright
         run: pyright src
@@ -151,19 +141,20 @@ jobs:
 
       # Catch image-only dependency and startup failures.
       - name: Build the image
-        run: docker build -t adk-harness-fleet:ci .
+        run: docker build -t adk-harness-workspace:ci .
 
-      - name: The fleet must import inside the image
+      - name: The workspace agent must import inside the image
         run: |
           docker run --rm \
             -e GOOGLE_CLOUD_PROJECT=ci-placeholder \
-            adk-harness-fleet:ci \
+            adk-harness-workspace:ci \
             python -c "
           import sys
           sys.path.insert(0, '/app/agents')
-          from fleet.agent import app, fleet
+          from workspace.agent import app
           print('app:', app.name)
-          print('harnesses:', [(s.id, s.available) for s in fleet.specs])
           assert app.plugins, 'the governance plugin must be attached'
+          from adk_harness.cloud.entrypoints import receiver_entrypoint, worker_main
+          assert callable(receiver_entrypoint) and callable(worker_main)
           print('image-smoke-ok')
           "

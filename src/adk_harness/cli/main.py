@@ -1,387 +1,350 @@
-"""Setup, diagnostics, adapter scaffolding, and MCP serving commands."""
+"""Supported local setup and Antigravity diagnostics."""
 
 from __future__ import annotations
 
 import argparse
 import asyncio
+import importlib.resources
 import json
-import keyword
 import os
-import shutil
-import subprocess
 import sys
-import tempfile
+import time
 from pathlib import Path
+from typing import Any
 
-from adk_harness.coding.registry import default_registry
+from adk_harness.auth.credentials import (
+    CloudGrantChallenge,
+    CredentialPurpose,
+    SecureCredentialStore,
+)
+from adk_harness.auth.google import (
+    AuthStatus,
+    GoogleAuthenticator,
+    GoogleAuthError,
+    LocalApprovalBridge,
+    LocalApprovalSession,
+    verify_firebase_identity,
+)
+from adk_harness.integrations.antigravity import AntigravityIntegration
 
 __all__ = ["main"]
 
-PLUGIN_DIR = Path.home() / ".gemini/config/plugins/adk-harness"
-SCOPES = {
-    "calendar": "https://www.googleapis.com/auth/calendar.events",
-    "gmail": "https://www.googleapis.com/auth/gmail.compose",
+
+async def _doctor() -> int:
+    result = await AntigravityIntegration().discover()
+    print("antigravity")
+    print("  available:", result.get("available", False))
+    if result.get("detail"):
+        print("  detail:", result["detail"])
+    return 0 if result.get("available") else 1
+
+
+_DEFAULT_SCOPES = {
+    CredentialPurpose.PROVISIONING: ("openid", "https://www.googleapis.com/auth/cloud-platform"),
+    CredentialPurpose.WORKSPACE: ("openid", "https://www.googleapis.com/auth/calendar.events"),
 }
 
-OK = "  ok    "
-NO = "  needs "
 
-
-def _run(*args: str) -> tuple[int, str]:
+def _client_config(path: str | None) -> dict[str, Any]:
+    configured = path or os.environ.get("ADK_HARNESS_GOOGLE_CLIENT_CONFIG")
+    if not configured:
+        raise GoogleAuthError("Google OAuth client configuration is not configured")
     try:
-        done = subprocess.run(
-            args, capture_output=True, text=True, timeout=60, check=False
-        )
-    except (OSError, subprocess.TimeoutExpired) as exc:
-        return 1, str(exc)
-    output = done.stdout if done.returncode == 0 else done.stderr
-    return done.returncode, (output or "").strip()
+        return json.loads(Path(configured).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        raise GoogleAuthError("Google OAuth client configuration could not be loaded") from None
 
 
-def _plugin_source() -> Path | None:
-    """The bundled plugin directory, whether installed or run from a checkout."""
-    here = Path(__file__).resolve()
-    for candidate in (
-        here.parents[1] / "plugins" / "antigravity",
-        here.parents[3] / "plugins" / "antigravity",
-    ):
-        if (candidate / "plugin.json").exists():
-            return candidate
-    return None
-
-
-def _check_gcloud() -> tuple[bool, str]:
-    if shutil.which("gcloud") is None:
-        return False, "install the Google Cloud CLI: https://cloud.google.com/sdk"
-    return True, "gcloud is installed"
-
-
-def _check_project() -> tuple[bool, str]:
-    project = os.environ.get("GOOGLE_CLOUD_PROJECT")
-    if project:
-        return True, f"project {project} (from GOOGLE_CLOUD_PROJECT)"
-    code, out = _run("gcloud", "config", "get-value", "project")
-    if code == 0 and out and out != "(unset)":
-        return True, f"project {out} (from gcloud config)"
-    return False, "set one: gcloud config set project YOUR_PROJECT_ID"
-
-
-def _check_scopes() -> tuple[bool, str]:
-    """Ask Google what the token carries, not the credentials what they believe."""
-    try:
-        import google.auth
-        import google.auth.transport.requests
-    except ImportError:
-        return False, 'pip install "adk-harness[google-workspace]"'
-
-    try:
-        credentials, _ = google.auth.default(scopes=list(SCOPES.values()))
-        request = google.auth.transport.requests.Request()
-        credentials.refresh(request)
-        response = request(
-            url=(
-                "https://oauth2.googleapis.com/tokeninfo?access_token="
-                f"{credentials.token}"
-            ),
-            method="GET",
-        )
-    except Exception as exc:  # no ADC at all
-        return False, f"no usable credentials ({type(exc).__name__}); see below"
-
-    if response.status != 200:
-        return True, "service-account credentials (scopes not introspectable)"
-
-    granted = set(str(json.loads(response.data).get("scope", "")).split())
-    missing = [name for name, scope in SCOPES.items() if scope not in granted]
-    if not missing:
-        return True, "calendar and gmail scopes present"
-    return False, f"token is missing: {', '.join(missing)}"
-
-
-def _login_command() -> str:
-    scopes = ",".join(
-        [
-            "openid",
-            "https://www.googleapis.com/auth/userinfo.email",
-            "https://www.googleapis.com/auth/cloud-platform",
-            *SCOPES.values(),
-        ]
-    )
-    return (
-        "gcloud auth application-default login \\\n"
-        "    --client-id-file=$HOME/Downloads/client_secret.json \\\n"
-        f"    --scopes={scopes}"
+def _build_auth(path: str | None = None) -> GoogleAuthenticator:
+    return GoogleAuthenticator(
+        client_config=_client_config(path),
+        store=SecureCredentialStore(),
     )
 
 
-def _install_plugin() -> tuple[bool, str]:
-    source = _plugin_source()
-    if source is None:
-        return False, "cannot find the bundled plugin directory"
-    PLUGIN_DIR.parent.mkdir(parents=True, exist_ok=True)
-    backup = PLUGIN_DIR.with_name(f"{PLUGIN_DIR.name}.backup")
-    if backup.exists() or backup.is_symlink():
-        return False, f"backup already exists at {backup}; remove it after review"
-    staging = Path(tempfile.mkdtemp(prefix=f".{PLUGIN_DIR.name}-", dir=PLUGIN_DIR.parent))
+def _auth_status(
+    purpose: CredentialPurpose,
+    *,
+    client_config: str | None = None,
+    subject: str | None = None,
+) -> dict[str, object]:
+    """Return only non-secret local authentication metadata."""
     try:
-        shutil.copytree(source, staging, dirs_exist_ok=True)
-        config = staging / "mcp_config.json"
-        data = json.loads(config.read_text())
-        entry = data["mcpServers"]["adk-harness"]
-        entry["command"] = sys.executable
-        env = entry.setdefault("env", {})
-        env["ADK_HARNESS_WORKSPACE"] = str(Path.cwd())
-        env.pop("ADK_PRECEDENTS", None)
-        project = os.environ.get("GOOGLE_CLOUD_PROJECT")
-        if project:
-            env["GOOGLE_CLOUD_PROJECT"] = project
-        else:
-            env.pop("GOOGLE_CLOUD_PROJECT", None)
-        config.write_text(json.dumps(data, indent=2) + "\n")
-        if PLUGIN_DIR.exists() or PLUGIN_DIR.is_symlink():
-            PLUGIN_DIR.rename(backup)
-        try:
-            staging.rename(PLUGIN_DIR)
-        except Exception:
-            if backup.exists() or backup.is_symlink():
-                backup.rename(PLUGIN_DIR)
-            raise
-    except Exception as exc:
-        if staging.exists():
-            shutil.rmtree(staging)
-        return False, f"could not install plugin safely: {type(exc).__name__}: {exc}"
-    return True, f"installed to {PLUGIN_DIR}"
-
-
-def _setup(check: bool) -> int:
-
-    print("adk-harness setup\n")
-    checks = [
-        ("gcloud", _check_gcloud()),
-        ("project", _check_project()),
-        ("scopes", _check_scopes()),
-    ]
-    for name, (passed, detail) in checks:
-        print(f"{OK if passed else NO}{name:10} {detail}")
-
-    if not check:
-        passed, detail = _install_plugin()
-        print(f"{OK if passed else NO}{'plugin':10} {detail}")
-        checks.append(("plugin", (passed, detail)))
-
-    blocked = [name for name, (passed, _) in checks if not passed]
-    if not blocked:
-        print("\nRestart Antigravity. The Calendar and Gmail tools will be there.")
-        return 0
-
-    print(f"\nNot ready yet: {', '.join(blocked)}.")
-    if "scopes" in blocked:
-        print(
-            "\nGoogle refuses Calendar and Gmail scopes to gcloud's shared OAuth\n"
-            "client, so you need your own. Once, in the Cloud console:\n\n"
-            "  1. console.cloud.google.com/auth/overview — create the consent\n"
-            "     screen, User type External, leave it in Testing\n"
-            "  2. console.cloud.google.com/auth/audience — add your own email\n"
-            "     under Test users. Skipping this is what causes 'Access blocked'\n"
-            "  3. console.cloud.google.com/auth/clients — create an OAuth client,\n"
-            "     type Desktop app, and download the JSON\n\n"
-            "Then run:\n\n"
-            f"{_login_command()}\n\n"
-            "Google drops scopes it will not grant rather than failing the login,\n"
-            "so check the consent screen actually lists Calendar and Gmail."
-        )
-    return 1
-
-
-def _doctor() -> int:
-    """Read-only diagnostics for every built-in and installed extension."""
-    async def inspect() -> tuple:
-        registry = default_registry()
-        return await registry.discover_all()
-
-    specs = asyncio.run(inspect())
-    print("adk-harness doctor\n")
-    ready = False
-    for spec in specs:
-        display_detail = spec.detail or ""
-        if spec.available:
-            if spec.id == "codex":
-                logged_in, detail = _codex_login_status()
-                status = "ready" if logged_in else "credentials missing"
-                action = "" if logged_in else "run `codex login`, then rerun doctor"
-                if not logged_in:
-                    display_detail = detail
-                else:
-                    ready = True
-            else:
-                status, action = "discovery-only (credentials unverified)", ""
-        else:
-            detail = (spec.detail or "unknown reason").lower()
-            if "server" in detail or "connect" in detail or "health" in detail:
-                status = "server unreachable"
-                action = (
-                    "run `opencode serve --port 4096`, then rerun doctor"
-                    if spec.id == "opencode"
-                    else "start the harness server, then rerun doctor"
-                )
-            elif "credential" in detail or "auth" in detail or "token" in detail:
-                status = "credentials missing"
-                action = (
-                    "run `codex login`, then rerun doctor"
-                    if spec.id == "codex"
-                    else "configure the harness credentials, then rerun doctor"
-                )
-            elif "not installed" in detail or "not found" in detail or "could not" in detail:
-                status, action = "missing binary/package", _next_action(spec.id)
-            else:
-                status, action = "uncertain", "inspect the detail and rerun doctor"
-        print(f"{status:22} {spec.id:14} {display_detail}")
-        if action:
-            print(f"{'':22} {'':14} next: {action}")
-    return 0 if ready else 1
-
-
-def _codex_login_status() -> tuple[bool, str]:
-    """Check Codex auth without exposing its output or reading credentials."""
-    code, _ = _run("codex", "login", "status")
-    if code == 0:
-        return True, "codex login status reported an active login"
-    return False, "codex login status failed; credentials may be missing"
-
-
-def _next_action(harness_id: str) -> str:
+        status = _build_auth(client_config).status(purpose, subject=subject)
+    except (GoogleAuthError, RuntimeError, ValueError):
+        return {"stored": False, "authenticated": False, "reason": "authentication unavailable"}
     return {
-        "codex": "install Codex CLI, then run `codex login`",
-        "claude_code": (
-            "install with `pip install 'adk-harness[claude-code]'` and ensure "
-            "`claude` is on PATH"
-        ),
-        "opencode": "install OpenCode, then run `opencode serve --port 4096`",
-        "antigravity": "install with `pip install 'adk-harness[antigravity]'`",
-    }.get(harness_id, "install the extension package, then rerun `adk-harness doctor`")
+        "stored": status.stored,
+        "authenticated": status.authenticated,
+        "subject": status.subject,
+        "purpose": status.purpose.value,
+        "granted_scopes": status.granted_scopes,
+        "reason": status.reason,
+    }
 
 
-_ADAPTER_TEMPLATE = '''"""Minimal offline adapter scaffold for {name}."""
-from collections.abc import AsyncIterator
-from adk_harness.coding.protocol import HarnessSpec, HarnessTurn
+def _print_status(value: AuthStatus | dict[str, object]) -> None:
+    values = value if isinstance(value, dict) else {
+        "stored": value.stored,
+        "authenticated": value.authenticated,
+        "subject": value.subject,
+        "purpose": value.purpose.value,
+        "granted_scopes": value.granted_scopes,
+        "reason": value.reason,
+    }
+    for key, item in values.items():
+        if item is not None:
+            print(f"{key}: {item}")
 
 
-class {class_name}:
-    def __init__(self) -> None:
-        self.spec = HarnessSpec(id="{name}", version="0.1", capabilities=("text",), available=True)
-
-    async def discover(self) -> HarnessSpec:
-        return self.spec
-
-    async def aclose(self) -> None:
-        return None
-
-    async def _turns(self, prompt: str) -> AsyncIterator[HarnessTurn]:
-        yield HarnessTurn(kind="text", text=prompt, raw=prompt)
-
-    def run(
-        self, prompt: str, *, cwd: str, session_id: str | None = None
-    ) -> AsyncIterator[HarnessTurn]:
-        return self._turns(prompt)
-'''
+def _status(client_config: str | None = None, subject: str | None = None) -> int:
+    code = 0
+    for purpose in CredentialPurpose:
+        if client_config is None and subject is None:
+            value = _auth_status(purpose)
+        else:
+            value = _auth_status(purpose, client_config=client_config, subject=subject)
+        print(purpose.value)
+        _print_status(value)
+        if value.get("stored") and not value.get("authenticated"):
+            code = 1
+    return code
 
 
-_TEST_TEMPLATE = '''import pytest
-from adk_harness.coding.adapters.{name} import {class_name}
-
-
-@pytest.mark.asyncio
-async def test_{name}_echo() -> None:
-    turns = [turn async for turn in {class_name}().run("hello", cwd=".")]
-    assert turns[0].kind == "text"
-    assert turns[0].text == "hello"
-'''
-
-
-def _new_adapter(name: str) -> int:
-    if (
-        not name.isascii()
-        or not name.isidentifier()
-        or not name.islower()
-        or name.startswith("_")
-        or keyword.iskeyword(name)
-    ):
-        print("adapter name must be an ASCII lowercase Python identifier", file=sys.stderr)
-        return 2
-    root = Path.cwd()
-    adapter = root / "src" / "adk_harness" / "coding" / "adapters" / f"{name}.py"
-    test = root / "tests" / "coding" / "adapters" / f"test_{name}.py"
-    if adapter.exists() or test.exists() or adapter.is_symlink() or test.is_symlink():
-        print("refusing to overwrite existing adapter or test", file=sys.stderr)
-        return 2
-    if any(_symlink_ancestor(path, root) for path in (adapter, test)):
-        print("refusing to write through a symlinked directory", file=sys.stderr)
-        return 2
-    root_resolved = root.resolve()
-    if not adapter.resolve().is_relative_to(root_resolved) or not test.resolve().is_relative_to(
-        root_resolved
-    ):
-        print("refusing to write outside the current project", file=sys.stderr)
-        return 2
-    class_name = "".join(part.title() for part in name.split("_")) + "Harness"
-    adapter.parent.mkdir(parents=True, exist_ok=True)
-    test.parent.mkdir(parents=True, exist_ok=True)
-    created: list[Path] = []
+def _login(args: argparse.Namespace) -> int:
+    purpose = CredentialPurpose(args.purpose)
     try:
-        for path, content in (
-            (adapter, _ADAPTER_TEMPLATE.format(name=name, class_name=class_name)),
-            (test, _TEST_TEMPLATE.format(name=name, class_name=class_name)),
-        ):
-            fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644)
-            with os.fdopen(fd, "w") as output:
-                output.write(content)
-            created.append(path)
-    except FileExistsError:
-        for path in created:
-            path.unlink(missing_ok=True)
-        print("refusing to overwrite existing adapter or test", file=sys.stderr)
-        return 2
-    print(f"created {adapter}\ncreated {test}\nrun: pytest {test}")
+        status = _build_auth(args.client_config).login(
+            purpose,
+            scopes=tuple(args.scope or _DEFAULT_SCOPES[purpose]),
+        )
+    except (GoogleAuthError, RuntimeError, ValueError):
+        print("Google login failed or was cancelled", file=sys.stderr)
+        return 1
+    print(f"logged in: {status.subject}")
     return 0
 
 
-def _symlink_ancestor(path: Path, root: Path) -> bool:
-    current = root
-    for part in path.relative_to(root).parts[:-1]:
-        current /= part
-        if current.is_symlink():
-            return True
-    return False
+def _logout(args: argparse.Namespace) -> int:
+    try:
+        auth = _build_auth(args.client_config)
+        subjects = auth.store.subjects()
+        if args.subject is None and len(subjects) > 1:
+            raise GoogleAuthError("an explicit subject is required when multiple accounts exist")
+        subject = args.subject or (subjects[0] if subjects else None)
+        if not subject:
+            print("no stored credentials")
+            return 0
+        status = auth.logout(subject=subject, purpose=CredentialPurpose(args.purpose))
+    except (GoogleAuthError, RuntimeError, ValueError):
+        print("Google logout failed", file=sys.stderr)
+        return 1
+    print(status.reason or "local credentials deleted")
+    return 0
+
+
+def _ui(args: argparse.Namespace) -> int:  # noqa: PLR0915
+    """Start the trusted browser UI; capability is opened, never printed."""
+    bridge: LocalApprovalBridge | None = None
+    try:
+        auth = _build_auth(args.client_config)
+        subjects = auth.store.subjects()
+        if args.subject is None and len(subjects) > 1:
+            raise GoogleAuthError("an explicit subject is required when multiple accounts exist")
+        subject = args.subject or (subjects[0] if subjects else None)
+        if not subject or not auth.status(
+            CredentialPurpose.PROVISIONING, subject=subject
+        ).authenticated:
+            raise GoogleAuthError("a verified Google login is required before opening the UI")
+        firebase_config = (
+            json.loads(Path(args.firebase_config).read_text(encoding="utf-8"))
+            if args.firebase_config
+            else {}
+        )
+        firebase_project_id = str(firebase_config.get("projectId", ""))
+        cloud_destination = args.cloud_destination
+        cloud_challenge = None
+        if cloud_destination:
+            workspace_status = auth.status(CredentialPurpose.WORKSPACE, subject=subject)
+            if not workspace_status.authenticated:
+                raise GoogleAuthError("a verified Workspace grant is required for cloud consent")
+            workspace_record = auth.store.load(subject, CredentialPurpose.WORKSPACE)
+            if workspace_record is None:
+                raise GoogleAuthError("a verified Workspace grant is required for cloud consent")
+            cloud_challenge = CloudGrantChallenge.issue(
+                subject=subject,
+                destination=cloud_destination,
+                scopes=workspace_record.granted_scopes,
+            )
+        session = LocalApprovalSession.create()
+
+        def firebase_binding(body: dict[str, object]) -> dict[str, object]:
+            token = body.get("firebaseIdToken")
+            if not firebase_project_id or not isinstance(token, str):
+                raise GoogleAuthError("Firebase setup is not complete")
+            identity = verify_firebase_identity(
+                token,
+                firebase_project_id=firebase_project_id,
+                expected_google_subject=subject,
+            )
+            return {"firebaseUid": identity.firebase_uid, "googleSubject": identity.google_subject}
+
+        def cloud_consent(body: dict[str, object]) -> dict[str, object]:
+            token = body.get("firebaseIdToken")
+            if cloud_challenge is None or not firebase_project_id or not isinstance(token, str):
+                raise GoogleAuthError("cloud grant setup is not complete")
+            verify_firebase_identity(
+                token,
+                firebase_project_id=firebase_project_id,
+                expected_google_subject=subject,
+            )
+            from adk_harness.auth.credentials import WorkspaceGrantConsent
+
+            consent = WorkspaceGrantConsent.create(
+                subject=subject,
+                destination=cloud_challenge.destination,
+                scopes=cloud_challenge.scopes,
+            )
+            auth.upload_workspace_grant_to_secret_manager(
+                subject=subject,
+                destination=cloud_challenge.destination,
+                scopes=cloud_challenge.scopes,
+                consent=consent,
+            )
+            return {"status": "cloud grant stored"}
+
+        def setup_confirmation(body: dict[str, object]) -> dict[str, object]:
+            if body.get("googleSubject") != subject:
+                raise GoogleAuthError("setup confirmation account mismatch")
+            return {"status": "local setup confirmation received", "setupOnly": True}
+
+        bootstrap: dict[str, object] = {
+            "googleSubject": subject,
+            "firebaseConfig": firebase_config or None,
+            "setupOnly": not bool(firebase_project_id),
+        }
+        sync_engine = None
+        sync_callbacks: dict[str, Any] = {}
+        workflow_value: dict[str, Any] | None = None
+        if args.workflow_config or args.outbox:
+            if not args.workflow_config or not args.outbox:
+                raise GoogleAuthError("workflow UI requires both --workflow-config and --outbox")
+            from adk_harness.workflow.outbox import Outbox
+            from adk_harness.workflow.sync import SyncEngine
+            try:
+                loaded = json.loads(Path(args.workflow_config).read_text(encoding="utf-8"))
+                if not isinstance(loaded, dict):
+                    raise ValueError("workflow configuration must be an object")
+                workflow_value = loaded
+                sync_engine = SyncEngine(Outbox(args.outbox), workflow_config=loaded)
+                sync_callbacks = sync_engine.bridge_callbacks()
+                bootstrap["workflow"] = {"enabled": True, "outbox": str(args.outbox)}
+            except (OSError, ValueError, json.JSONDecodeError) as exc:
+                raise GoogleAuthError(f"workflow configuration could not be loaded: {exc}") from exc
+        if cloud_challenge is not None:
+            bootstrap["cloudGrant"] = {
+                "challenge": cloud_challenge.challenge,
+                "purpose": cloud_challenge.purpose.value,
+                "destination": cloud_challenge.destination,
+                "scopes": cloud_challenge.scopes,
+                "expiresAt": cloud_challenge.expires_at.isoformat(),
+            }
+
+        ui_root = Path(args.ui_root) if args.ui_root else Path.cwd() / "ui" / "approval"
+        if not (ui_root / "index.html").is_file() or not (ui_root / "dist" / "main.js").is_file():
+            packaged = Path(str(importlib.resources.files("adk_harness"))) / "ui" / "approval"
+            if (packaged / "index.html").is_file() and (packaged / "dist" / "main.js").is_file():
+                ui_root = packaged
+            else:
+                raise GoogleAuthError(
+                    "approval UI assets are missing; run npm ci --prefix ui/approval "
+                    "and npm run build --prefix ui/approval"
+                )
+        bridge = LocalApprovalBridge(
+            session=session,
+            ui_root=ui_root,
+            bootstrap=lambda: bootstrap,
+            firebase_binding=firebase_binding,
+            cloud_grant_consent=cloud_consent,
+            setup_confirmation=setup_confirmation,
+            cloud_grant_challenge=cloud_challenge,
+            workflow_preview=sync_callbacks.get("workflow_preview"),
+            workflow_consent=sync_callbacks.get("workflow_consent"),
+            workflow_ack=sync_callbacks.get("workflow_ack"),
+            workflow_reconcile=sync_callbacks.get("workflow_reconcile"),
+            workflow_recovery=sync_callbacks.get("workflow_recovery"),
+            workflow_config=workflow_value,
+        )
+        bridge.start()
+        session.open()
+        while True:
+            time.sleep(1)
+    except KeyboardInterrupt:
+        return 0
+    except (GoogleAuthError, OSError, ValueError):
+        print("trusted approval UI could not be started", file=sys.stderr)
+        return 1
+    finally:
+        if bridge is not None:
+            bridge.stop()
+
+
+def _readiness(args: argparse.Namespace) -> int:
+    """Print a truthful offline/read-only runtime readiness report."""
+    from adk_harness.cloud.readiness import RuntimeReadinessVerifier
+
+    try:
+        handoff = json.loads(Path(args.handoff).read_text(encoding="utf-8"))
+        selected = json.loads(Path(args.select_project).read_text(encoding="utf-8"))
+        if not isinstance(handoff, dict) or not isinstance(selected, dict):
+            raise ValueError("readiness inputs must be JSON objects")
+        report = RuntimeReadinessVerifier(handoff, selected).verify()
+    except (OSError, ValueError, json.JSONDecodeError) as exc:
+        print(f"readiness inputs could not be loaded: {exc}", file=sys.stderr)
+        return 2
+    print(json.dumps(report.to_dict(), sort_keys=True))
+    return 0 if report.ready else 1
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Setup, diagnose, and serve adk-harness.")
-    subparsers = parser.add_subparsers(dest="command")
-    setup_parser = subparsers.add_parser("setup", help="check and optionally install the plugin")
-    setup_parser.add_argument("--check", action="store_true", help="report only; install nothing")
-    subparsers.add_parser("doctor", help="read-only harness diagnostics")
-    new_parser = subparsers.add_parser("new-adapter", help="create a minimal adapter scaffold")
-    new_parser.add_argument("name")
-    subparsers.add_parser("serve", help="run the MCP server")
-    # Retain the old explicit --check flag; a bare invocation only shows help.
-    parser.add_argument("--check", action="store_true", help=argparse.SUPPRESS)
+    parser = argparse.ArgumentParser(
+        description="Local Google Antigravity workspace integration"
+    )
+    parser.add_argument(
+        "command",
+        nargs="?",
+        choices=("doctor", "status", "login", "logout", "ui", "onboard", "readiness"),
+        default="doctor",
+    )
+    parser.add_argument(
+        "--purpose",
+        choices=tuple(purpose.value for purpose in CredentialPurpose),
+        default=CredentialPurpose.PROVISIONING.value,
+    )
+    parser.add_argument("--scope", action="append")
+    parser.add_argument("--client-config")
+    parser.add_argument("--subject")
+    parser.add_argument("--firebase-config")
+    parser.add_argument("--cloud-destination")
+    parser.add_argument("--workspace-scope", action="append")
+    parser.add_argument("--ui-root")
+    parser.add_argument("--workflow-config", help="trusted local workflow configuration JSON")
+    parser.add_argument("--outbox", help="durable local SQLite outbox path")
+    parser.add_argument("--handoff", help="approved terraform_handoff JSON for readiness")
+    parser.add_argument("--select-project", help="verified select_project checkpoint JSON")
     args = parser.parse_args(argv)
-    if args.command is None:
-        if args.check:
-            return _setup(True)
-        parser.print_help()
-        return 0
-    if args.command == "setup":
-        return _setup(getattr(args, "check", False))
     if args.command == "doctor":
-        return _doctor()
-    if args.command == "serve":
-        from adk_harness.mcp.server import main as serve
-
-        serve()
-        return 0
-    return _new_adapter(args.name)
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())
+        return asyncio.run(_doctor())
+    if args.command == "status":
+        return _status(args.client_config, args.subject)
+    if args.command == "login":
+        return _login(args)
+    if args.command == "logout":
+        return _logout(args)
+    if args.command in {"ui", "onboard"}:
+        return _ui(args)
+    if args.command == "readiness":
+        if not args.handoff or not args.select_project:
+            parser.error("readiness requires --handoff and --select-project")
+        return _readiness(args)
+    return 1

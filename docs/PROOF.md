@@ -1,8 +1,13 @@
-# Proof: captured runs
+# Historical proof: captured pre-migration runs
 
-Everything below is recorded output from real runs against real infrastructure —
+Everything below is recorded output from real runs before the Antigravity only
+breaking migration —
 Gemini 3.5 Flash on Vertex AI, and a live Cloud Run service. No output on this
 page is illustrative, edited for effect, or written by hand.
+
+These commands and results are historical evidence, not supported current
+entrypoints. The Phase 8 local UI and read-only readiness boundary do not turn
+this into deployment, auth-context, IAM, or live Workspace proof.
 
 You can reproduce any of it (commands are given), but you should not have to in
 order to see what this library does.

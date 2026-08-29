@@ -1,86 +1,54 @@
-"""Build a governed app from ADK's Google Workspace toolsets.
-
-Each API operation is gated separately. Authentication uses Application Default
-Credentials with explicit service scopes.
-"""
+"""Build a governed, per-user Google Workspace planning application."""
 
 from __future__ import annotations
 
-import json
-import warnings
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from functools import partial
-from importlib.util import find_spec
 from typing import Any
 
 from coactra import Policy, Scope
 from google.adk.agents.llm_agent import LlmAgent
 from google.adk.apps.app import App
-from google.adk.auth.auth_credential import ServiceAccount
 
+from adk_harness.auth import CredentialPurpose, GoogleAuthenticator
 from adk_harness.governance import CoactraGovernance
 from adk_harness.governance.content_armor import ContentArmor
 from adk_harness.governance.ledger import FirestoreActionLedger
 from adk_harness.governance.precedents import PrecedentStore
 
+from .connections import (
+    APPLICATION_SCOPES,
+    OPERATIONS,
+    READ_OPERATION_ORDER,
+    READ_OPERATIONS,
+    CredentialReference,
+    WorkspaceConnection,
+    WorkspaceConsent,
+)
+
 __all__ = [
-    "SCOPES",
-    "TOOLSETS",
+    "APPLICATION_SCOPES",
+    "READ_OPERATIONS",
+    "CredentialReference",
     "WorkspaceApp",
-    "WorkspaceFleet",
+    "WorkspaceConnection",
+    "WorkspaceConsent",
     "build_workspace_app",
-    "build_workspace_fleet",
     "check_workspace_service_access",
-    "usable_services",
 ]
 
 DEFAULT_MODEL = "gemini-3.5-flash"
-
-SCOPES = {
-    "calendar": "https://www.googleapis.com/auth/calendar.events",
-    "gmail": "https://www.googleapis.com/auth/gmail.compose",
-    "docs": "https://www.googleapis.com/auth/documents",
-    "sheets": "https://www.googleapis.com/auth/spreadsheets",
-}
-"""Narrowest scope that does the job, per service.
-
-`gmail.compose` is a *restricted* scope: Google requires app verification before
-it will issue one outside a tester list. That is a real constraint, not a
-configuration mistake, and it is why a fleet may legitimately ship with Gmail
-absent.
-"""
-
-
-def _make_toolset(class_name: str, **kwargs: Any) -> Any:
-    """Keep optional Google API dependencies out of base-package imports."""
-    try:
-        from google.adk.tools import google_api_tool
-    except ImportError as exc:
-        raise RuntimeError(
-            'install Workspace dependencies: pip install "adk-harness[google-workspace]"'
-        ) from exc
-    return getattr(google_api_tool, class_name)(**kwargs)
-
-
-TOOLSETS: dict[str, Any] = {
-    service: partial(_make_toolset, class_name)
-    for service, class_name in (
-        ("calendar", "CalendarToolset"),
-        ("gmail", "GmailToolset"),
-        ("docs", "DocsToolset"),
-        ("sheets", "SheetsToolset"),
-    )
-}
+SCOPES = {service: scopes[0] for service, scopes in APPLICATION_SCOPES.items()}
 
 
 @dataclass(frozen=True, slots=True)
 class WorkspaceApp:
-    """A governed Workspace app, plus the gate that answers for it."""
+    """An ADK planner with a separately governed Workspace connection."""
 
     app: App
     orchestrator: LlmAgent
     governance: CoactraGovernance
+    connection: WorkspaceConnection
     services: tuple[str, ...]
     tool_names: tuple[str, ...]
 
@@ -93,165 +61,157 @@ async def build_workspace_app(
     *,
     policy: Policy,
     scope: Scope,
+    authenticator: GoogleAuthenticator,
+    credential_reference: CredentialReference,
+    consent: WorkspaceConsent,
+    resource_allowlist: Mapping[str, Sequence[str]] | None = None,
     services: Sequence[str] = ("calendar",),
     tool_filter: Sequence[str] | None = None,
     model: str = DEFAULT_MODEL,
-    principal: str = "user:local",
+    principal: str | None = None,
     precedents: PrecedentStore | None = None,
     ledger: FirestoreActionLedger | None = None,
     armor: ContentArmor | None = None,
-    name: str = "workspace_fleet",
+    name: str = "workspace_app",
     instruction: str | None = None,
 ) -> WorkspaceApp:
-    """Wire official Workspace toolsets behind one policy gate.
+    """Build the planner using an explicit verified grant reference.
 
-    Use tool_filter to expose only the operations the app needs, before policy checks.
+    No credentials are serialized into the returned app or passed to the
+    model. Only bounded read functions are model facing; mutations are solely
+    available through the connection's host boundary.
     """
-    unknown = [s for s in services if s not in TOOLSETS]
+    selected = tuple(dict.fromkeys(services))
+    unknown = [service for service in selected if service not in APPLICATION_SCOPES]
     if unknown:
-        raise ValueError(
-            f"unknown Workspace service(s): {', '.join(unknown)}; "
-            f"known: {', '.join(sorted(TOOLSETS))}"
-        )
-
-    credential = ServiceAccount(
-        use_default_credential=True,
-        scopes=[SCOPES[service] for service in services],
+        raise ValueError(f"unknown Workspace service(s): {', '.join(unknown)}")
+    if resource_allowlist is None:
+        raise ValueError("Workspace app requires an explicit resource allowlist")
+    if principal is not None and principal != credential_reference.subject:
+        raise ValueError("policy principal must match the verified Workspace subject")
+    selected_ops = tuple(tool_filter) if tool_filter is not None else tuple(
+        operation for operation in READ_OPERATION_ORDER if operation.split("_", 1)[0] in selected
     )
+    unsupported = [operation for operation in selected_ops if operation not in OPERATIONS]
+    if unsupported:
+        raise ValueError(f"unsupported Workspace operation(s): {', '.join(unsupported)}")
+    wrong_service = [
+        operation for operation in selected_ops if operation.split("_", 1)[0] not in selected
+    ]
+    if wrong_service:
+        raise ValueError("tool_filter contains an operation for an unselected service")
+    if any(operation not in READ_OPERATIONS for operation in selected_ops):
+        raise ValueError("mutating Workspace operations are host-only and cannot be model tools")
 
-    tools: list[Any] = []
-    for service in services:
-        tools.append(
-            TOOLSETS[service](
-                service_account=credential,
-                tool_filter=list(tool_filter) if tool_filter else None,
-            )
-        )
-
+    connection = WorkspaceConnection(
+        authenticator=authenticator,
+        credential_reference=credential_reference,
+        consent=consent,
+        resource_allowlist=resource_allowlist,
+    )
     governance = CoactraGovernance(
         policy=policy,
         scope=scope,
-        principal=principal,
+        principal=principal or credential_reference.subject,
         precedents=precedents,
         ledger=ledger,
         armor=armor,
     )
-
+    tools = [_planning_tool(connection, operation) for operation in selected_ops]
     orchestrator = LlmAgent(
         name=name,
         model=model,
-        description="Completes Workspace work under a single policy gate.",
-        instruction=instruction or _instruction(services),
+        description="Plans bounded Workspace reads under explicit consent and policy gates.",
+        instruction=instruction or _instruction(selected),
         tools=tools,
     )
-
-    names: list[str] = []
-    for toolset in tools:
-        names.extend(tool.name for tool in await toolset.get_tools())
-
     return WorkspaceApp(
         app=App(name=name, root_agent=orchestrator, plugins=[governance]),
         orchestrator=orchestrator,
         governance=governance,
-        services=tuple(services),
-        tool_names=tuple(names),
+        connection=connection,
+        services=selected,
+        tool_names=tuple(selected_ops),
     )
+
+
+def _planning_tool(connection: WorkspaceConnection, operation: str) -> Any:
+    method = getattr(connection, operation)
+
+    if operation == "calendar_get_event":
+        def calendar_get_tool(calendar_id: str, event_id: str) -> Any:
+            return method(calendar_id=calendar_id, event_id=event_id)
+        tool = calendar_get_tool
+    elif operation == "calendar_list_events":
+        def calendar_list_tool(
+            calendar_id: str, time_min: str, time_max: str, max_results: int = 25
+        ) -> Any:
+            return method(
+                calendar_id=calendar_id,
+                time_min=time_min,
+                time_max=time_max,
+                max_results=max_results,
+            )
+        tool = calendar_list_tool
+    elif operation == "gmail_list_drafts":
+        def gmail_list_tool(max_results: int = 25, page_token: str | None = None) -> Any:
+            return method(max_results=max_results, page_token=page_token)
+        tool = gmail_list_tool
+    elif operation == "gmail_get_draft":
+        def gmail_get_tool(draft_id: str) -> Any:
+            return method(draft_id=draft_id)
+        tool = gmail_get_tool
+    elif operation == "docs_get":
+        def docs_get_tool(document_id: str) -> Any:
+            return method(document_id=document_id)
+        tool = docs_get_tool
+    elif operation == "sheets_get_values":
+        def sheets_get_tool(spreadsheet_id: str, range: str) -> Any:
+            return method(spreadsheet_id=spreadsheet_id, range=range)
+        tool = sheets_get_tool
+    else:
+        raise ValueError(f"operation is not a model planning read: {operation}")
+
+    tool.__name__ = operation
+    tool.__qualname__ = operation
+    tool.__doc__ = f"Execute the bounded, consented {operation} read."
+    return tool
 
 
 async def check_workspace_service_access(
-    services: Sequence[str] = tuple(SCOPES),
+    services: Sequence[str],
+    *,
+    authenticator: GoogleAuthenticator,
+    credential_reference: CredentialReference,
 ) -> dict[str, str | None]:
-    """Return service-to-error mappings; None means no access issue was detected.
+    """Check grant metadata without default credentials or custom introspection.
 
-    Inspect token scopes because user ADC granted_scopes can be empty. Tokens that
-    cannot be introspected are left to the API's authorization checks.
+    This does not establish resource access; every connection operation still
+    performs its consented official API preflight.
     """
-    if find_spec("googleapiclient") is None:
-        return dict.fromkeys(
-            services, 'install Workspace dependencies: pip install "adk-harness[google-workspace]"'
-        )
-
-    if not services:
-        return {}
-
-    import google.auth
-    import google.auth.transport.requests
-
-    try:
-        credentials, _ = google.auth.default(scopes=list(SCOPES.values()))
-        request = google.auth.transport.requests.Request()
-        credentials.refresh(request)
-    except Exception as exc:
-        detail = f"no usable Application Default Credentials: {exc}"
-        return dict.fromkeys(services, detail)
-
-    token = getattr(credentials, "token", None)
-    if not token:
-        return dict.fromkeys(services, "credentials produced no access token")
-
-    response = request(
-        url=f"https://oauth2.googleapis.com/tokeninfo?access_token={token}",
-        method="GET",
-    )
-    if response.status != 200:
-        # A service account's token is not introspectable this way. It holds
-        # whatever its identity was granted, and there is nothing to check.
-        return dict.fromkeys(services)
-
-    payload = json.loads(response.data)
-    granted = set(str(payload.get("scope", "")).split())
-
     result: dict[str, str | None] = {}
     for service in services:
-        needed = SCOPES.get(service)
-        if needed is None:
+        scopes = APPLICATION_SCOPES.get(service)
+        if scopes is None:
             result[service] = f"unknown service {service!r}"
-        elif needed in granted:
-            result[service] = None
-        else:
-            result[service] = (
-                f"the token does not carry {needed}. Re-run `gcloud auth "
-                "application-default login --client-id-file=... --scopes=..."
-                f",{needed}` and check the consent screen actually lists it — "
-                "Google drops scopes it will not grant rather than failing."
+            continue
+        try:
+            authenticator.verified_credentials(
+                CredentialPurpose.WORKSPACE,
+                subject=credential_reference.subject,
+                required_scopes=scopes,
             )
+        except Exception:
+            result[service] = "verified Workspace credentials or required scope unavailable"
+        else:
+            result[service] = None
     return result
 
 
-# Compatibility names retained for callers of the pre-audit API.
-WorkspaceFleet = WorkspaceApp
-
-
-async def build_workspace_fleet(**kwargs: Any) -> WorkspaceApp:
-    warnings.warn(
-        "build_workspace_fleet() is deprecated; use build_workspace_app()",
-        DeprecationWarning,
-        stacklevel=2,
-    )
-    return await build_workspace_app(**kwargs)
-
-
-async def usable_services(
-    services: Sequence[str] = tuple(SCOPES),
-) -> dict[str, str | None]:
-    warnings.warn(
-        "usable_services() is deprecated; use check_workspace_service_access()",
-        DeprecationWarning,
-        stacklevel=2,
-    )
-    return await check_workspace_service_access(services)
-
-
 def _instruction(services: Sequence[str]) -> str:
-    """Describe available services and require the model to respect policy refusals."""
     return (
-        f"You complete work in Google Workspace: {', '.join(services)}.\n\n"
-        "Use `primary` as the calendar id unless told otherwise. Call tools "
-        "with complete arguments; do not guess times or recipients that were "
-        "not given to you.\n\n"
-        "Every tool call passes a policy gate. A result with status 'blocked' "
-        "is a decision, not a transient error: report the reason and stop. Do "
-        "not retry it, and do not look for a different tool that achieves the "
-        "same thing. If the gate asks a human to confirm, wait for the answer "
-        "rather than proceeding."
+        f"Plan bounded reads in Google Workspace: {', '.join(services)}. "
+        "Use only explicitly listed resources and time ranges. Consent or "
+        "policy refusals are terminal; report the reason and stop. Workspace "
+        "mutations, mail sending, and sharing changes are host-only or prohibited."
     )

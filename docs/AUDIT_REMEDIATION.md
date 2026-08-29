@@ -1,4 +1,8 @@
-# Audit assessment and remediation
+# Historical audit assessment and remediation
+
+This report describes the pre-migration repository state and is retained as
+historical evidence. Current installation and integration behavior is defined
+by `docs/architecture.md` and `docs/migration-antigravity-only.md`.
 
 Date: 2026-08-27. Six Luna agents implemented separate fixes; the integrator
 reviewed the combined changes and added regression and installation checks.

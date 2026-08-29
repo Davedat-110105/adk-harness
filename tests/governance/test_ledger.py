@@ -5,7 +5,7 @@ import json
 from datetime import UTC, datetime
 from typing import Any
 
-from adk_harness.governance.ledger import FirestoreActionLedger
+from adk_harness.governance.ledger import EvidenceConflict, FirestoreActionLedger
 
 
 class AlreadyExists(Exception):
@@ -84,8 +84,35 @@ class FakeClient:
         self.documents: dict[str, dict[str, Any]] = {}
 
     def collection(self, name: str) -> FakeCollection:
-        assert name == "action_ledger"
+        assert name in {"action_ledger", "policy_evidence"}
         return FakeCollection(self.documents)
+
+
+def test_policy_evidence_replay_is_exact_and_conflicting_reuse_fails() -> None:
+    client = FakeClient()
+    ledger = FirestoreActionLedger(client, owner_namespace="owner-a")
+    values = {
+        "actor": "user:datta",
+        "approval_hash": "a" * 64,
+        "policy_version": "policy-1",
+        "decision": "allow",
+        "operation_id": "operation-a",
+        "outcome": "completed",
+        "trace_id": "trace-a",
+        "idempotency_key": "audit-a",
+    }
+
+    first = ledger.record_evidence(**values)
+    assert ledger.record_evidence(**values) == first
+    try:
+        ledger.record_evidence(**(values | {"outcome": "failed"}))
+    except EvidenceConflict:
+        pass
+    else:
+        raise AssertionError("conflicting immutable evidence must fail")
+    stored = next(iter(client.documents.values()))
+    assert "secret" not in repr(stored).casefold()
+    assert stored["owner_namespace"] == "owner-a"
 
 
 def _record(ledger: FirestoreActionLedger, key: str, **overrides: Any) -> str:

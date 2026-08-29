@@ -1,33 +1,35 @@
 # Architecture and migration
 
-The source is grouped by feature:
+This release is an Antigravity only local integration. The application owns
+workspace boundaries, policy decisions, immutable workflow records, and audit
+evidence. Official Google SDKs own authentication, service clients, and vendor
+lifecycle behavior.
 
 ```text
-src/adk_harness/coding/{protocol,registry,harness_agent,fleet,adapters}
-src/adk_harness/governance/{gate,precedents,stores,content_armor,ledger}
-src/adk_harness/workspace/app.py
-src/adk_harness/mcp/server.py
-src/adk_harness/cli/main.py
+src/adk_harness/integrations/antigravity.py  local SDK discovery and streaming
+src/adk_harness/workspace/app.py             governed ADK Workspace toolsets
+src/adk_harness/workflow/models.py           immutable request and evidence records
+src/adk_harness/governance/{gate,precedents,stores,content_armor,ledger}.py
+src/adk_harness/cli/main.py                  local auth, onboarding, and readiness commands
+src/adk_harness/cloud/readiness.py            read-only official SDK readiness boundary
+plugins/antigravity/                         native integration assets
 ```
 
-The public imports remain available from `adk_harness`. Compatibility names are
-kept temporarily: `WorkspaceFleet`/`build_workspace_fleet`, `armor`, `stores`,
-and `agent` point to their canonical replacements. New code should use
-`WorkspaceApp`/`build_workspace_app` from the package root, or these feature paths:
+The public package exports the current `WorkspaceApp`, `build_workspace_app`,
+`AntigravityIntegration`, and the four workflow records. Workspace operations
+are gated one tool at a time. An approval is valid only for the exact current
+change hash, actor, scope, policy version, resource versions, and expiry.
 
-| Feature | Canonical module |
-|---|---|
-| ADK agent wrapper | `adk_harness.coding.harness_agent` |
-| Adapter contract and discovery | `adk_harness.coding.protocol`, `adk_harness.coding.registry` |
-| Policy gate | `adk_harness.governance.gate` |
-| Saved human decisions | `adk_harness.governance.precedents`, `adk_harness.governance.stores` |
-| Content screening and audit | `adk_harness.governance.content_armor`, `adk_harness.governance.ledger` |
-| Google Workspace tools | `adk_harness.workspace.app` |
+The trusted local approval UI wires setup confirmation, workflow preview,
+consent, Firebase Lite instructions, acknowledgements, manifest/result reads,
+imports, and durable unknown recovery. Cloud deployment, effective IAM,
+Eventarc auth-context provenance, popup login, and Workspace outcomes remain
+explicit live proof boundaries.
 
-`PersistentPrecedentStore` remains a deprecated alias for `SQLitePrecedentStore`.
-`MatchResult` is available from the package root. Old module aliases share the
-canonical module objects; there is no separate registry or runtime state.
+## Breaking migration
 
-Workspace operations are gated one tool at a time. Coding harness dispatch is
-gated before the vendor process starts; calls made within that process require
-the vendor's own permission hook.
+The generic coding harness, multi-vendor adapters, fleet builder, and retired
+server entrypoints were removed. Existing imports must migrate to the
+Antigravity integration and `build_workspace_app`; there are no compatibility
+aliases for the removed architecture. The old implementation and run records
+remain historical evidence only. See [the migration note](migration-antigravity-only.md).

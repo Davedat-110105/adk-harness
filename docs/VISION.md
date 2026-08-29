@@ -1,4 +1,13 @@
-# Three phases: local orchestrator → remote workspace → many clients
+# Historical vision and migration context
+
+This document records pre-migration architecture research. It is not an active
+server or multi-vendor integration contract. The supported Phase 1 surface is
+the local Antigravity integration described in `docs/architecture.md`.
+
+All implementation and deployment statements below are historical captures
+from 2026-08-27. The MCP server, multi-vendor fleet, and claimed deployed
+Cloud Run fleets described in those captures are retired and are not shipped
+or evidence of the current runtime.
 
 The goal, in the owner's words: Antigravity orchestrates the models in its own
 environment locally; that syncs to a remote workspace; eventually several
@@ -11,7 +20,7 @@ hard part of phase 3 is a phase 1 decision. Written 2026-08-27.
 
 ## Phase 1 — Antigravity as a local orchestrator
 
-**What exists:** an MCP server (`src/adk_harness/mcp_server.py`), packaged as
+**Historical capture — what existed:** an MCP server (`src/adk_harness/mcp_server.py`), packaged as
 an Antigravity plugin (`plugins/antigravity/` — `plugin.json` + `mcp_config.json` +
 `skills/` + `rules/`, installed to `~/.gemini/config/plugins`), exposing
 governed Workspace operations — and, behind `ADK_HARNESSES=1`, each installed
@@ -50,7 +59,7 @@ models — and has nothing to do with the IDE, since it runs outside it.
 
 ## Phase 2 — sync to a remote workspace
 
-**What exists, and it is most of this:**
+**Historical capture — what existed at the time:**
 
 - A deployed Cloud Run service, already running two fleets.
 - `CoactraGovernance` — the gate, identical wherever it runs.

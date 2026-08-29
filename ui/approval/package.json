@@ -1,0 +1,21 @@
+{
+  "name": "adk-harness-approval-ui",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "esbuild src/main.ts --bundle --format=esm --outfile=dist/main.js && node build-assets.cjs",
+    "test": "vitest run --environment jsdom --pool=threads --poolOptions.threads.singleThread=true",
+    "test:mounted": "node tests/support/run-mounted-host.cjs"
+  },
+  "dependencies": {
+    "canonicalize": "2.1.0",
+    "firebase": "12.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "24.3.0",
+    "esbuild": "0.25.9",
+    "jsdom": "26.1.0",
+    "typescript": "5.9.2",
+    "vitest": "3.2.7"
+  }
+}

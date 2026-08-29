@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self' https://*.googleapis.com https://securetoken.googleapis.com https://identitytoolkit.googleapis.com https://apis.google.com; frame-src https://*.firebaseapp.com https://accounts.google.com; script-src 'self' https://apis.google.com; style-src 'self' 'unsafe-inline';" />
+    <title>Trusted approval session</title>
+  </head>
+  <body>
+    <main id="app" data-local-google-sub="">
+      <h1>Trusted setup confirmation</h1>
+      <p id="state">Sign in with Google to bind this browser to the verified local account.</p>
+      <section id="setup-only" hidden>
+        <h2>Local setup confirmation</h2>
+        <p id="setup-subject"></p>
+        <p>This confirms only that the verified Google account is ready for approved setup. Firebase and task actions stay disabled until setup supplies Firebase configuration.</p>
+        <button id="setup-confirm" type="button">Confirm local setup readiness</button>
+      </section>
+      <button id="login" type="button">Sign in with Google</button>
+      <button id="logout" type="button" hidden>Sign out</button>
+      <section id="cloud-grant" hidden>
+        <h2>Cloud Workspace grant</h2>
+        <p id="cloud-grant-details"></p>
+        <label id="cloud-consent-label">
+        <input id="cloud-consent" type="checkbox" />
+          I consent to store this exact Workspace grant in the displayed destination.
+        </label>
+        <button id="cloud-consent-submit" type="button">Confirm cloud grant</button>
+      </section>
+      <section id="manual-sync" hidden>
+        <h2>Manual local history sync</h2>
+        <p id="sync-details">Preview local history before any remote SDK call.</p>
+        <button id="sync-preview" type="button">Preview local history</button>
+        <label><input id="sync-consent" type="checkbox" /> I consent to upload this exact history batch.</label>
+        <button id="sync-upload" type="button" disabled>Upload approved history</button>
+        <hr />
+        <button id="task-preview" type="button">Preview task request</button>
+        <label><input id="task-consent" type="checkbox" /> I consent to the exact upload/run approval.</label>
+        <label><input id="apply-consent" type="checkbox" /> I consent to the exact apply changeset approval.</label>
+        <button id="task-record" type="button" disabled>Record approved task</button>
+        <hr />
+        <h2>Download staged result</h2>
+        <p id="download-details">A bounded metadata read is required before any result is displayed.</p>
+        <button id="manifest-preview" type="button">Preview manifest read</button>
+        <label><input id="manifest-consent" type="checkbox" /> I consent to read this exact bounded manifest.</label>
+        <button id="manifest-read" type="button" disabled>Read approved manifest</button>
+        <label><input id="result-consent" type="checkbox" /> I consent to download the displayed exact result.</label>
+        <button id="result-read" type="button" disabled>Preview exact result</button>
+        <button id="result-download" type="button" disabled>Download approved result</button>
+        <button id="sync-reconcile" type="button" hidden>Preview reconciliation read</button>
+        <label><input id="reconcile-consent" type="checkbox" /> I consent to read these exact unresolved paths.</label>
+        <button id="reconcile-read" type="button" disabled>Read and reconcile</button>
+      </section>
+    </main>
+    <script type="module" src="./dist/main.js"></script>
+  </body>
+</html>

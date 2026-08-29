@@ -1,0 +1,1496 @@
+{
+  "clock": "2026-08-28T20:02:17.123456+00:00",
+  "config": {
+    "project_id": "demo-adk-wire",
+    "workspace_id": "workspace-1",
+    "control_database_id": "control",
+    "runtime_database_id": "runtime",
+    "session_id": "eh2L-0SSE8HjNLVhk4ZkeEsR",
+    "session_expires_at": "2026-08-28T20:32:17.679725+00:00"
+  },
+  "plan_preview": {
+    "stage": "preview",
+    "operation_id": "request-preview-ae1be0057de8048977a38a021850748a",
+    "descriptor_hash": "bf77020c2e2cceacf77414e23ebb26a623d0e13ab9bf1e70f3eb6d746051aa71",
+    "request_hash": "614d2a8a812666dff147ed2e93f9d552d914f731a4ea2eb13a50cc6037b1b560",
+    "bound_digest": "614d2a8a812666dff147ed2e93f9d552d914f731a4ea2eb13a50cc6037b1b560",
+    "approval_type": "upload_run",
+    "project_id": "demo-adk-wire",
+    "workspace_id": "workspace-1",
+    "task_id": "plan-1",
+    "owner_google_subject": "google-1",
+    "firebase_uid": "firebase-1",
+    "request": {
+      "schema_version": 1,
+      "task_id": "plan-1",
+      "project_id": "demo-adk-wire",
+      "workspace_id": "workspace-1",
+      "user_id": "google-1",
+      "content": "synthetic plan",
+      "intent": "plan",
+      "plan": {
+        "10": "ten",
+        "2": "two",
+        "nested_ts": "keep exactly",
+        "microseconds": "2026-08-28T20:02:17.123456+00:00"
+      },
+      "download_scopes": [],
+      "apply_scopes": [],
+      "scope": {},
+      "resource_versions": {},
+      "policy_version": "policy-1",
+      "trace_id": "trace-1",
+      "created_at": "2026-08-28T20:02:17.123456+00:00",
+      "state": "draft"
+    },
+    "changeset": null,
+    "download_scopes": [],
+    "apply_scopes": [],
+    "scope": {},
+    "resource_versions": {},
+    "destination": "control",
+    "expires_at": "2026-08-28T20:07:17.123456+00:00",
+    "transfer": {
+      "sdk_calls": 0,
+      "documents": 0,
+      "bytes": 0
+    }
+  },
+  "plan_consent": {
+    "stage": "instruction",
+    "operation_id": "request-614d2a8a812666dff147ed2e93f9d552",
+    "descriptor_hash": "95f1769bdc5e1177101b57f95ef8c9c6dc711dd1e78157f76842f66fe22f4d3b",
+    "instruction": {
+      "bounds": {
+        "max_bytes": 1000000,
+        "max_documents": 500
+      },
+      "database": "control",
+      "descriptor": {
+        "action_scope": {},
+        "approval_id": "4ce89413-1aa1-4503-b9f0-b6291038605e",
+        "approval_type": "upload_run",
+        "bound_digest": "614d2a8a812666dff147ed2e93f9d552d914f731a4ea2eb13a50cc6037b1b560",
+        "bound_digest_kind": "task_request",
+        "destination": "control",
+        "expires_at": "2026-08-28T20:07:17.123456+00:00",
+        "firebase_uid": "firebase-1",
+        "google_sub": "google-1",
+        "kind": "task_request",
+        "policy_version": "policy-1",
+        "project_id": "demo-adk-wire",
+        "request_hash": "614d2a8a812666dff147ed2e93f9d552d914f731a4ea2eb13a50cc6037b1b560",
+        "request_id": "request-614d2a8a812666dff147ed2e93f9d552",
+        "resource_versions": {},
+        "session_id": "eh2L-0SSE8HjNLVhk4ZkeEsR",
+        "workspace_id": "workspace-1"
+      },
+      "descriptor_hash": "95f1769bdc5e1177101b57f95ef8c9c6dc711dd1e78157f76842f66fe22f4d3b",
+      "firebase_uid": "firebase-1",
+      "method": "writeBatch",
+      "namespace": "control",
+      "operation_id": "request-614d2a8a812666dff147ed2e93f9d552",
+      "owner_google_subject": "google-1",
+      "payload": {
+        "database": "control",
+        "method": "writeBatch",
+        "writes": [
+          {
+            "data": {
+              "apply_scopes": [],
+              "approval_id": "4ce89413-1aa1-4503-b9f0-b6291038605e",
+              "canonical_payload": "{\"apply_scopes\":[],\"content\":\"synthetic plan\",\"created_at\":\"2026-08-28T20:02:17.123456+00:00\",\"download_scopes\":[],\"intent\":\"plan\",\"plan\":{\"10\":\"ten\",\"2\":\"two\",\"microseconds\":\"2026-08-28T20:02:17.123456+00:00\",\"nested_ts\":\"keep exactly\"},\"policy_version\":\"policy-1\",\"project_id\":\"demo-adk-wire\",\"resource_versions\":{},\"schema_version\":1,\"scope\":{},\"task_id\":\"plan-1\",\"trace_id\":\"trace-1\",\"user_id\":\"google-1\",\"workspace_id\":\"workspace-1\"}",
+              "content": "synthetic plan",
+              "created_at": "2026-08-28T20:02:17.123456+00:00",
+              "download_scopes": [],
+              "expires_at_ts": {
+                "nanoseconds": 123456000,
+                "seconds": 1787947637,
+                "type": "firestore/timestamp/1.0"
+              },
+              "firebase_uid": "firebase-1",
+              "google_sub": "google-1",
+              "intent": "plan",
+              "owner_google_subject": "google-1",
+              "plan": {
+                "10": "ten",
+                "2": "two",
+                "microseconds": "2026-08-28T20:02:17.123456+00:00",
+                "nested_ts": "keep exactly"
+              },
+              "policy_version": "policy-1",
+              "project_id": "demo-adk-wire",
+              "request_hash": "614d2a8a812666dff147ed2e93f9d552d914f731a4ea2eb13a50cc6037b1b560",
+              "request_id": "request-614d2a8a812666dff147ed2e93f9d552",
+              "required_approval": "upload_run",
+              "required_approvals": [
+                "4ce89413-1aa1-4503-b9f0-b6291038605e"
+              ],
+              "resource_versions": {},
+              "schema_version": 1,
+              "scope": {},
+              "session_id": "eh2L-0SSE8HjNLVhk4ZkeEsR",
+              "state": "submitted",
+              "task_id": "plan-1",
+              "trace_id": "trace-1",
+              "user_id": "google-1",
+              "workspace_id": "workspace-1"
+            },
+            "mode": "create",
+            "path": "projects/demo-adk-wire/workspaces/workspace-1/members/firebase-1/requests/request-614d2a8a812666dff147ed2e93f9d552"
+          },
+          {
+            "data": {
+              "action_scope": {},
+              "approval_hash": "c07a36309f616503276ceed26b237be47771ef2b4263fb177de03d945100c491",
+              "approval_id": "4ce89413-1aa1-4503-b9f0-b6291038605e",
+              "approval_type": "upload_run",
+              "approved_at": "2026-08-28T20:02:17.719346+00:00",
+              "approved_at_ts": {
+                "nanoseconds": 719346000,
+                "seconds": 1787947337,
+                "type": "firestore/timestamp/1.0"
+              },
+              "approver_firebase_uid": "firebase-1",
+              "approver_google_sub": "google-1",
+              "approver_id": "google-1",
+              "bound_digest_kind": "task_request",
+              "canonical_payload": "{\"action_scope\":{},\"approval_id\":\"4ce89413-1aa1-4503-b9f0-b6291038605e\",\"approved_at\":\"2026-08-28T20:02:17.719346+00:00\",\"approver_id\":\"google-1\",\"change_hash\":\"614d2a8a812666dff147ed2e93f9d552d914f731a4ea2eb13a50cc6037b1b560\",\"expires_at\":\"2026-08-28T20:07:17.123456+00:00\",\"policy_version\":\"policy-1\",\"project_id\":\"demo-adk-wire\",\"resource_versions\":{},\"schema_version\":1,\"task_id\":\"plan-1\",\"trace_id\":\"510bb1ca-dc6d-4f28-9abe-075aa2bbd830\",\"workspace_id\":\"workspace-1\"}",
+              "change_hash": "614d2a8a812666dff147ed2e93f9d552d914f731a4ea2eb13a50cc6037b1b560",
+              "descriptor_hash": "bf77020c2e2cceacf77414e23ebb26a623d0e13ab9bf1e70f3eb6d746051aa71",
+              "destination": "control",
+              "expires_at": "2026-08-28T20:07:17.123456+00:00",
+              "expires_at_ts": {
+                "nanoseconds": 123456000,
+                "seconds": 1787947637,
+                "type": "firestore/timestamp/1.0"
+              },
+              "firebase_uid": "firebase-1",
+              "google_sub": "google-1",
+              "policy_version": "policy-1",
+              "project_id": "demo-adk-wire",
+              "request_id": "request-614d2a8a812666dff147ed2e93f9d552",
+              "resource_versions": {},
+              "schema_version": 1,
+              "session_id": "eh2L-0SSE8HjNLVhk4ZkeEsR",
+              "task_id": "plan-1",
+              "trace_id": "510bb1ca-dc6d-4f28-9abe-075aa2bbd830",
+              "workspace_id": "workspace-1"
+            },
+            "mode": "create",
+            "path": "projects/demo-adk-wire/workspaces/workspace-1/members/firebase-1/requests/request-614d2a8a812666dff147ed2e93f9d552/approvals/4ce89413-1aa1-4503-b9f0-b6291038605e"
+          }
+        ]
+      },
+      "payload_hash": "4f704c536c82effc2cfb0cee03b6e262acf5a1bbf30fc45868ff2e04d335fc17",
+      "project_id": "demo-adk-wire",
+      "sdk": "firebase/firestore/lite",
+      "session_id": "eh2L-0SSE8HjNLVhk4ZkeEsR",
+      "version": 1,
+      "workspace_id": "workspace-1",
+      "writes": [
+        {
+          "data": {
+            "apply_scopes": [],
+            "approval_id": "4ce89413-1aa1-4503-b9f0-b6291038605e",
+            "canonical_payload": "{\"apply_scopes\":[],\"content\":\"synthetic plan\",\"created_at\":\"2026-08-28T20:02:17.123456+00:00\",\"download_scopes\":[],\"intent\":\"plan\",\"plan\":{\"10\":\"ten\",\"2\":\"two\",\"microseconds\":\"2026-08-28T20:02:17.123456+00:00\",\"nested_ts\":\"keep exactly\"},\"policy_version\":\"policy-1\",\"project_id\":\"demo-adk-wire\",\"resource_versions\":{},\"schema_version\":1,\"scope\":{},\"task_id\":\"plan-1\",\"trace_id\":\"trace-1\",\"user_id\":\"google-1\",\"workspace_id\":\"workspace-1\"}",
+            "content": "synthetic plan",
+            "created_at": "2026-08-28T20:02:17.123456+00:00",
+            "download_scopes": [],
+            "expires_at_ts": {
+              "nanoseconds": 123456000,
+              "seconds": 1787947637,
+              "type": "firestore/timestamp/1.0"
+            },
+            "firebase_uid": "firebase-1",
+            "google_sub": "google-1",
+            "intent": "plan",
+            "owner_google_subject": "google-1",
+            "plan": {
+              "10": "ten",
+              "2": "two",
+              "microseconds": "2026-08-28T20:02:17.123456+00:00",
+              "nested_ts": "keep exactly"
+            },
+            "policy_version": "policy-1",
+            "project_id": "demo-adk-wire",
+            "request_hash": "614d2a8a812666dff147ed2e93f9d552d914f731a4ea2eb13a50cc6037b1b560",
+            "request_id": "request-614d2a8a812666dff147ed2e93f9d552",
+            "required_approval": "upload_run",
+            "required_approvals": [
+              "4ce89413-1aa1-4503-b9f0-b6291038605e"
+            ],
+            "resource_versions": {},
+            "schema_version": 1,
+            "scope": {},
+            "session_id": "eh2L-0SSE8HjNLVhk4ZkeEsR",
+            "state": "submitted",
+            "task_id": "plan-1",
+            "trace_id": "trace-1",
+            "user_id": "google-1",
+            "workspace_id": "workspace-1"
+          },
+          "mode": "create",
+          "path": "projects/demo-adk-wire/workspaces/workspace-1/members/firebase-1/requests/request-614d2a8a812666dff147ed2e93f9d552"
+        },
+        {
+          "data": {
+            "action_scope": {},
+            "approval_hash": "c07a36309f616503276ceed26b237be47771ef2b4263fb177de03d945100c491",
+            "approval_id": "4ce89413-1aa1-4503-b9f0-b6291038605e",
+            "approval_type": "upload_run",
+            "approved_at": "2026-08-28T20:02:17.719346+00:00",
+            "approved_at_ts": {
+              "nanoseconds": 719346000,
+              "seconds": 1787947337,
+              "type": "firestore/timestamp/1.0"
+            },
+            "approver_firebase_uid": "firebase-1",
+            "approver_google_sub": "google-1",
+            "approver_id": "google-1",
+            "bound_digest_kind": "task_request",
+            "canonical_payload": "{\"action_scope\":{},\"approval_id\":\"4ce89413-1aa1-4503-b9f0-b6291038605e\",\"approved_at\":\"2026-08-28T20:02:17.719346+00:00\",\"approver_id\":\"google-1\",\"change_hash\":\"614d2a8a812666dff147ed2e93f9d552d914f731a4ea2eb13a50cc6037b1b560\",\"expires_at\":\"2026-08-28T20:07:17.123456+00:00\",\"policy_version\":\"policy-1\",\"project_id\":\"demo-adk-wire\",\"resource_versions\":{},\"schema_version\":1,\"task_id\":\"plan-1\",\"trace_id\":\"510bb1ca-dc6d-4f28-9abe-075aa2bbd830\",\"workspace_id\":\"workspace-1\"}",
+            "change_hash": "614d2a8a812666dff147ed2e93f9d552d914f731a4ea2eb13a50cc6037b1b560",
+            "descriptor_hash": "bf77020c2e2cceacf77414e23ebb26a623d0e13ab9bf1e70f3eb6d746051aa71",
+            "destination": "control",
+            "expires_at": "2026-08-28T20:07:17.123456+00:00",
+            "expires_at_ts": {
+              "nanoseconds": 123456000,
+              "seconds": 1787947637,
+              "type": "firestore/timestamp/1.0"
+            },
+            "firebase_uid": "firebase-1",
+            "google_sub": "google-1",
+            "policy_version": "policy-1",
+            "project_id": "demo-adk-wire",
+            "request_id": "request-614d2a8a812666dff147ed2e93f9d552",
+            "resource_versions": {},
+            "schema_version": 1,
+            "session_id": "eh2L-0SSE8HjNLVhk4ZkeEsR",
+            "task_id": "plan-1",
+            "trace_id": "510bb1ca-dc6d-4f28-9abe-075aa2bbd830",
+            "workspace_id": "workspace-1"
+          },
+          "mode": "create",
+          "path": "projects/demo-adk-wire/workspaces/workspace-1/members/firebase-1/requests/request-614d2a8a812666dff147ed2e93f9d552/approvals/4ce89413-1aa1-4503-b9f0-b6291038605e"
+        }
+      ]
+    }
+  },
+  "plan_reconcile_preview": {
+    "stage": "preview",
+    "operation_id": "reconcile-read-cb5a6834f1123429dcb8e722a8c2f908",
+    "descriptor_hash": "49ded886385c49d1b5dfb40f1a8f67794f49a158cc4bb5ebd6036c98101c93d2",
+    "target_operation_id": "request-614d2a8a812666dff147ed2e93f9d552",
+    "target_descriptor_hash": "95f1769bdc5e1177101b57f95ef8c9c6dc711dd1e78157f76842f66fe22f4d3b",
+    "paths": [
+      "projects/demo-adk-wire/workspaces/workspace-1/members/firebase-1/requests/request-614d2a8a812666dff147ed2e93f9d552",
+      "projects/demo-adk-wire/workspaces/workspace-1/members/firebase-1/requests/request-614d2a8a812666dff147ed2e93f9d552/approvals/4ce89413-1aa1-4503-b9f0-b6291038605e"
+    ],
+    "database": "control",
+    "expires_at": "2026-08-28T20:07:17.123456+00:00",
+    "transfer": {
+      "sdk_calls": 0,
+      "documents": 0,
+      "bytes": 0
+    }
+  },
+  "plan_reconcile_consent": {
+    "stage": "instruction",
+    "operation_id": "reconcile-read-cb5a6834f1123429dcb8e722a8c2f908",
+    "descriptor_hash": "49ded886385c49d1b5dfb40f1a8f67794f49a158cc4bb5ebd6036c98101c93d2",
+    "instruction": {
+      "bounds": {
+        "max_bytes": 1000000,
+        "max_documents": 500
+      },
+      "database": "control",
+      "descriptor": {
+        "database": "control",
+        "expires_at": "2026-08-28T20:07:17.123456+00:00",
+        "firebase_uid": "firebase-1",
+        "google_subject": "google-1",
+        "kind": "reconciliation_read",
+        "paths": [
+          "projects/demo-adk-wire/workspaces/workspace-1/members/firebase-1/requests/request-614d2a8a812666dff147ed2e93f9d552",
+          "projects/demo-adk-wire/workspaces/workspace-1/members/firebase-1/requests/request-614d2a8a812666dff147ed2e93f9d552/approvals/4ce89413-1aa1-4503-b9f0-b6291038605e"
+        ],
+        "project_id": "demo-adk-wire",
+        "session_id": "eh2L-0SSE8HjNLVhk4ZkeEsR",
+        "target_descriptor_hash": "95f1769bdc5e1177101b57f95ef8c9c6dc711dd1e78157f76842f66fe22f4d3b",
+        "target_operation_id": "request-614d2a8a812666dff147ed2e93f9d552",
+        "task_id": "",
+        "workspace_id": "workspace-1"
+      },
+      "descriptor_hash": "49ded886385c49d1b5dfb40f1a8f67794f49a158cc4bb5ebd6036c98101c93d2",
+      "firebase_uid": "firebase-1",
+      "method": "getDoc",
+      "namespace": "control",
+      "operation_id": "reconcile-read-cb5a6834f1123429dcb8e722a8c2f908",
+      "owner_google_subject": "google-1",
+      "path": "projects/demo-adk-wire/workspaces/workspace-1/members/firebase-1/requests/request-614d2a8a812666dff147ed2e93f9d552",
+      "payload": {
+        "database": "control",
+        "method": "getDoc",
+        "path": "projects/demo-adk-wire/workspaces/workspace-1/members/firebase-1/requests/request-614d2a8a812666dff147ed2e93f9d552",
+        "read_scope": "reconciliation",
+        "reads": [
+          {
+            "method": "getDoc",
+            "path": "projects/demo-adk-wire/workspaces/workspace-1/members/firebase-1/requests/request-614d2a8a812666dff147ed2e93f9d552",
+            "whole_document": true
+          },
+          {
+            "method": "getDoc",
+            "path": "projects/demo-adk-wire/workspaces/workspace-1/members/firebase-1/requests/request-614d2a8a812666dff147ed2e93f9d552/approvals/4ce89413-1aa1-4503-b9f0-b6291038605e",
+            "whole_document": true
+          }
+        ],
+        "whole_document": true
+      },
+      "payload_hash": "8d56ab69ee9182008924417b3250d7dc9df88b4245cd25edc503c76fdf8c632c",
+      "project_id": "demo-adk-wire",
+      "read_scope": "reconciliation",
+      "reads": [
+        {
+          "method": "getDoc",
+          "path": "projects/demo-adk-wire/workspaces/workspace-1/members/firebase-1/requests/request-614d2a8a812666dff147ed2e93f9d552",
+          "whole_document": true
+        },
+        {
+          "method": "getDoc",
+          "path": "projects/demo-adk-wire/workspaces/workspace-1/members/firebase-1/requests/request-614d2a8a812666dff147ed2e93f9d552/approvals/4ce89413-1aa1-4503-b9f0-b6291038605e",
+          "whole_document": true
+        }
+      ],
+      "sdk": "firebase/firestore/lite",
+      "session_id": "eh2L-0SSE8HjNLVhk4ZkeEsR",
+      "version": 1,
+      "whole_document": true,
+      "workspace_id": "workspace-1"
+    }
+  },
+  "apply_preview": {
+    "stage": "preview",
+    "operation_id": "request-preview-30e6846615e446bad7ad7e8c3c6c6c52",
+    "descriptor_hash": "b0b16d4eeb75e3e128b773f5c106a96462ccd3bb46a8922ccf65d89b9b8b5fab",
+    "request_hash": "f78b474b01abcf34d04473c0de9c93b69a327a920aa823bd43a96985310895c4",
+    "bound_digest": "d0e47a6a0f61b288edeb5bc6e907ddea1f6d61ab8b03c7aa7b3f691cd2bcc44a",
+    "approval_type": "exact_apply",
+    "project_id": "demo-adk-wire",
+    "workspace_id": "workspace-1",
+    "task_id": "apply-1",
+    "owner_google_subject": "google-1",
+    "firebase_uid": "firebase-1",
+    "request": {
+      "schema_version": 1,
+      "task_id": "apply-1",
+      "project_id": "demo-adk-wire",
+      "workspace_id": "workspace-1",
+      "user_id": "google-1",
+      "content": "synthetic apply",
+      "intent": "apply",
+      "plan": {
+        "changeset_hash": "d0e47a6a0f61b288edeb5bc6e907ddea1f6d61ab8b03c7aa7b3f691cd2bcc44a"
+      },
+      "download_scopes": [],
+      "apply_scopes": [
+        "calendar.events"
+      ],
+      "scope": {},
+      "resource_versions": {},
+      "policy_version": "policy-1",
+      "trace_id": "trace-1",
+      "created_at": "2026-08-28T20:02:17.123456+00:00",
+      "state": "draft"
+    },
+    "changeset": {
+      "schema_version": 1,
+      "change_id": "change-1",
+      "task_id": "apply-1",
+      "project_id": "demo-adk-wire",
+      "workspace_id": "workspace-1",
+      "user_id": "google-1",
+      "changes": [
+        {
+          "operation": "calendar.events.insert",
+          "context": {
+            "10": "ten",
+            "2": "two",
+            "nested_ts": "keep exactly",
+            "microseconds": "2026-08-28T20:02:17.123456+00:00"
+          }
+        }
+      ],
+      "resource_versions": {},
+      "policy_version": "policy-1",
+      "trace_id": "trace-1",
+      "created_at": "2026-08-28T20:02:17.123456+00:00"
+    },
+    "download_scopes": [],
+    "apply_scopes": [
+      "calendar.events"
+    ],
+    "scope": {},
+    "resource_versions": {},
+    "destination": "control",
+    "expires_at": "2026-08-28T20:07:17.123456+00:00",
+    "transfer": {
+      "sdk_calls": 0,
+      "documents": 0,
+      "bytes": 0
+    }
+  },
+  "apply_consent": {
+    "stage": "instruction",
+    "operation_id": "request-f78b474b01abcf34d04473c0de9c93b6",
+    "descriptor_hash": "842b0c46c2de10c499dd5c1596bd303bb63d1762c91cc2004b0b7bbec7f1395e",
+    "instruction": {
+      "bounds": {
+        "max_bytes": 1000000,
+        "max_documents": 500
+      },
+      "database": "control",
+      "descriptor": {
+        "action_scope": {},
+        "approval_id": "52307498-c8c1-462f-8898-6a6ae0c744e5",
+        "approval_type": "exact_apply",
+        "bound_digest": "d0e47a6a0f61b288edeb5bc6e907ddea1f6d61ab8b03c7aa7b3f691cd2bcc44a",
+        "bound_digest_kind": "changeset",
+        "destination": "control",
+        "expires_at": "2026-08-28T20:07:17.123456+00:00",
+        "firebase_uid": "firebase-1",
+        "google_sub": "google-1",
+        "kind": "task_request",
+        "policy_version": "policy-1",
+        "project_id": "demo-adk-wire",
+        "request_hash": "f78b474b01abcf34d04473c0de9c93b69a327a920aa823bd43a96985310895c4",
+        "request_id": "request-f78b474b01abcf34d04473c0de9c93b6",
+        "resource_versions": {},
+        "session_id": "eh2L-0SSE8HjNLVhk4ZkeEsR",
+        "workspace_id": "workspace-1"
+      },
+      "descriptor_hash": "842b0c46c2de10c499dd5c1596bd303bb63d1762c91cc2004b0b7bbec7f1395e",
+      "firebase_uid": "firebase-1",
+      "method": "writeBatch",
+      "namespace": "control",
+      "operation_id": "request-f78b474b01abcf34d04473c0de9c93b6",
+      "owner_google_subject": "google-1",
+      "payload": {
+        "database": "control",
+        "method": "writeBatch",
+        "writes": [
+          {
+            "data": {
+              "apply_scopes": [
+                "calendar.events"
+              ],
+              "approval_id": "52307498-c8c1-462f-8898-6a6ae0c744e5",
+              "canonical_payload": "{\"apply_scopes\":[\"calendar.events\"],\"content\":\"synthetic apply\",\"created_at\":\"2026-08-28T20:02:17.123456+00:00\",\"download_scopes\":[],\"intent\":\"apply\",\"plan\":{\"changeset_hash\":\"d0e47a6a0f61b288edeb5bc6e907ddea1f6d61ab8b03c7aa7b3f691cd2bcc44a\"},\"policy_version\":\"policy-1\",\"project_id\":\"demo-adk-wire\",\"resource_versions\":{},\"schema_version\":1,\"scope\":{},\"task_id\":\"apply-1\",\"trace_id\":\"trace-1\",\"user_id\":\"google-1\",\"workspace_id\":\"workspace-1\"}",
+              "changeset": {
+                "change_id": "change-1",
+                "changes": [
+                  {
+                    "context": {
+                      "10": "ten",
+                      "2": "two",
+                      "microseconds": "2026-08-28T20:02:17.123456+00:00",
+                      "nested_ts": "keep exactly"
+                    },
+                    "operation": "calendar.events.insert"
+                  }
+                ],
+                "created_at": "2026-08-28T20:02:17.123456+00:00",
+                "policy_version": "policy-1",
+                "project_id": "demo-adk-wire",
+                "resource_versions": {},
+                "schema_version": 1,
+                "task_id": "apply-1",
+                "trace_id": "trace-1",
+                "user_id": "google-1",
+                "workspace_id": "workspace-1"
+              },
+              "changeset_canonical": "{\"change_id\":\"change-1\",\"changes\":[{\"context\":{\"10\":\"ten\",\"2\":\"two\",\"microseconds\":\"2026-08-28T20:02:17.123456+00:00\",\"nested_ts\":\"keep exactly\"},\"operation\":\"calendar.events.insert\"}],\"created_at\":\"2026-08-28T20:02:17.123456+00:00\",\"policy_version\":\"policy-1\",\"project_id\":\"demo-adk-wire\",\"resource_versions\":{},\"schema_version\":1,\"task_id\":\"apply-1\",\"trace_id\":\"trace-1\",\"user_id\":\"google-1\",\"workspace_id\":\"workspace-1\"}",
+              "changeset_hash": "d0e47a6a0f61b288edeb5bc6e907ddea1f6d61ab8b03c7aa7b3f691cd2bcc44a",
+              "content": "synthetic apply",
+              "created_at": "2026-08-28T20:02:17.123456+00:00",
+              "download_scopes": [],
+              "expires_at_ts": {
+                "nanoseconds": 123456000,
+                "seconds": 1787947637,
+                "type": "firestore/timestamp/1.0"
+              },
+              "firebase_uid": "firebase-1",
+              "google_sub": "google-1",
+              "intent": "apply",
+              "owner_google_subject": "google-1",
+              "plan": {
+                "changeset_hash": "d0e47a6a0f61b288edeb5bc6e907ddea1f6d61ab8b03c7aa7b3f691cd2bcc44a"
+              },
+              "policy_version": "policy-1",
+              "project_id": "demo-adk-wire",
+              "request_hash": "f78b474b01abcf34d04473c0de9c93b69a327a920aa823bd43a96985310895c4",
+              "request_id": "request-f78b474b01abcf34d04473c0de9c93b6",
+              "required_approval": "exact_apply",
+              "required_approvals": [
+                "a27f5a7b-2369-42b3-9d56-2eced033d452",
+                "52307498-c8c1-462f-8898-6a6ae0c744e5"
+              ],
+              "resource_versions": {},
+              "schema_version": 1,
+              "scope": {},
+              "session_id": "eh2L-0SSE8HjNLVhk4ZkeEsR",
+              "state": "submitted",
+              "task_id": "apply-1",
+              "trace_id": "trace-1",
+              "user_id": "google-1",
+              "workspace_id": "workspace-1"
+            },
+            "mode": "create",
+            "path": "projects/demo-adk-wire/workspaces/workspace-1/members/firebase-1/requests/request-f78b474b01abcf34d04473c0de9c93b6"
+          },
+          {
+            "data": {
+              "action_scope": {},
+              "approval_hash": "576a0176e7bd478522889c7b20a60e8a77b706633865b9dde16fb6fda208c295",
+              "approval_id": "a27f5a7b-2369-42b3-9d56-2eced033d452",
+              "approval_type": "upload_run",
+              "approved_at": "2026-08-28T20:02:17.891189+00:00",
+              "approved_at_ts": {
+                "nanoseconds": 891189000,
+                "seconds": 1787947337,
+                "type": "firestore/timestamp/1.0"
+              },
+              "approver_firebase_uid": "firebase-1",
+              "approver_google_sub": "google-1",
+              "approver_id": "google-1",
+              "bound_digest_kind": "task_request",
+              "canonical_payload": "{\"action_scope\":{},\"approval_id\":\"a27f5a7b-2369-42b3-9d56-2eced033d452\",\"approved_at\":\"2026-08-28T20:02:17.891189+00:00\",\"approver_id\":\"google-1\",\"change_hash\":\"f78b474b01abcf34d04473c0de9c93b69a327a920aa823bd43a96985310895c4\",\"expires_at\":\"2026-08-28T20:07:17.123456+00:00\",\"policy_version\":\"policy-1\",\"project_id\":\"demo-adk-wire\",\"resource_versions\":{},\"schema_version\":1,\"task_id\":\"apply-1\",\"trace_id\":\"38438bff-dbac-4470-b18c-3f7662430cb8\",\"workspace_id\":\"workspace-1\"}",
+              "change_hash": "f78b474b01abcf34d04473c0de9c93b69a327a920aa823bd43a96985310895c4",
+              "descriptor_hash": "b52f09497b2ab096066f532953764d2cdfb6ad88d00d6ab3ac682491dade669e",
+              "destination": "control",
+              "expires_at": "2026-08-28T20:07:17.123456+00:00",
+              "expires_at_ts": {
+                "nanoseconds": 123456000,
+                "seconds": 1787947637,
+                "type": "firestore/timestamp/1.0"
+              },
+              "firebase_uid": "firebase-1",
+              "google_sub": "google-1",
+              "policy_version": "policy-1",
+              "project_id": "demo-adk-wire",
+              "request_id": "request-f78b474b01abcf34d04473c0de9c93b6",
+              "resource_versions": {},
+              "schema_version": 1,
+              "session_id": "eh2L-0SSE8HjNLVhk4ZkeEsR",
+              "task_id": "apply-1",
+              "trace_id": "38438bff-dbac-4470-b18c-3f7662430cb8",
+              "workspace_id": "workspace-1"
+            },
+            "mode": "create",
+            "path": "projects/demo-adk-wire/workspaces/workspace-1/members/firebase-1/requests/request-f78b474b01abcf34d04473c0de9c93b6/approvals/a27f5a7b-2369-42b3-9d56-2eced033d452"
+          },
+          {
+            "data": {
+              "action_scope": {},
+              "approval_hash": "35da7049e2270cd027341c8a452d7627a2d00d7679bbc9653c7eb1073079af3c",
+              "approval_id": "52307498-c8c1-462f-8898-6a6ae0c744e5",
+              "approval_type": "exact_apply",
+              "approved_at": "2026-08-28T20:02:17.891189+00:00",
+              "approved_at_ts": {
+                "nanoseconds": 891189000,
+                "seconds": 1787947337,
+                "type": "firestore/timestamp/1.0"
+              },
+              "approver_firebase_uid": "firebase-1",
+              "approver_google_sub": "google-1",
+              "approver_id": "google-1",
+              "bound_digest_kind": "changeset",
+              "canonical_payload": "{\"action_scope\":{},\"approval_id\":\"52307498-c8c1-462f-8898-6a6ae0c744e5\",\"approved_at\":\"2026-08-28T20:02:17.891189+00:00\",\"approver_id\":\"google-1\",\"change_hash\":\"d0e47a6a0f61b288edeb5bc6e907ddea1f6d61ab8b03c7aa7b3f691cd2bcc44a\",\"expires_at\":\"2026-08-28T20:07:17.123456+00:00\",\"policy_version\":\"policy-1\",\"project_id\":\"demo-adk-wire\",\"resource_versions\":{},\"schema_version\":1,\"task_id\":\"apply-1\",\"trace_id\":\"9bb68094-3d0d-408f-822a-b11d49747ef7\",\"workspace_id\":\"workspace-1\"}",
+              "change_hash": "d0e47a6a0f61b288edeb5bc6e907ddea1f6d61ab8b03c7aa7b3f691cd2bcc44a",
+              "descriptor_hash": "b0b16d4eeb75e3e128b773f5c106a96462ccd3bb46a8922ccf65d89b9b8b5fab",
+              "destination": "control",
+              "expires_at": "2026-08-28T20:07:17.123456+00:00",
+              "expires_at_ts": {
+                "nanoseconds": 123456000,
+                "seconds": 1787947637,
+                "type": "firestore/timestamp/1.0"
+              },
+              "firebase_uid": "firebase-1",
+              "google_sub": "google-1",
+              "policy_version": "policy-1",
+              "project_id": "demo-adk-wire",
+              "request_id": "request-f78b474b01abcf34d04473c0de9c93b6",
+              "resource_versions": {},
+              "schema_version": 1,
+              "session_id": "eh2L-0SSE8HjNLVhk4ZkeEsR",
+              "task_id": "apply-1",
+              "trace_id": "9bb68094-3d0d-408f-822a-b11d49747ef7",
+              "workspace_id": "workspace-1"
+            },
+            "mode": "create",
+            "path": "projects/demo-adk-wire/workspaces/workspace-1/members/firebase-1/requests/request-f78b474b01abcf34d04473c0de9c93b6/approvals/52307498-c8c1-462f-8898-6a6ae0c744e5"
+          }
+        ]
+      },
+      "payload_hash": "46edec792be30cb6744f84f9107ace2be519a8bafebaa2a1dbeec84c1e852bac",
+      "project_id": "demo-adk-wire",
+      "sdk": "firebase/firestore/lite",
+      "session_id": "eh2L-0SSE8HjNLVhk4ZkeEsR",
+      "version": 1,
+      "workspace_id": "workspace-1",
+      "writes": [
+        {
+          "data": {
+            "apply_scopes": [
+              "calendar.events"
+            ],
+            "approval_id": "52307498-c8c1-462f-8898-6a6ae0c744e5",
+            "canonical_payload": "{\"apply_scopes\":[\"calendar.events\"],\"content\":\"synthetic apply\",\"created_at\":\"2026-08-28T20:02:17.123456+00:00\",\"download_scopes\":[],\"intent\":\"apply\",\"plan\":{\"changeset_hash\":\"d0e47a6a0f61b288edeb5bc6e907ddea1f6d61ab8b03c7aa7b3f691cd2bcc44a\"},\"policy_version\":\"policy-1\",\"project_id\":\"demo-adk-wire\",\"resource_versions\":{},\"schema_version\":1,\"scope\":{},\"task_id\":\"apply-1\",\"trace_id\":\"trace-1\",\"user_id\":\"google-1\",\"workspace_id\":\"workspace-1\"}",
+            "changeset": {
+              "change_id": "change-1",
+              "changes": [
+                {
+                  "context": {
+                    "10": "ten",
+                    "2": "two",
+                    "microseconds": "2026-08-28T20:02:17.123456+00:00",
+                    "nested_ts": "keep exactly"
+                  },
+                  "operation": "calendar.events.insert"
+                }
+              ],
+              "created_at": "2026-08-28T20:02:17.123456+00:00",
+              "policy_version": "policy-1",
+              "project_id": "demo-adk-wire",
+              "resource_versions": {},
+              "schema_version": 1,
+              "task_id": "apply-1",
+              "trace_id": "trace-1",
+              "user_id": "google-1",
+              "workspace_id": "workspace-1"
+            },
+            "changeset_canonical": "{\"change_id\":\"change-1\",\"changes\":[{\"context\":{\"10\":\"ten\",\"2\":\"two\",\"microseconds\":\"2026-08-28T20:02:17.123456+00:00\",\"nested_ts\":\"keep exactly\"},\"operation\":\"calendar.events.insert\"}],\"created_at\":\"2026-08-28T20:02:17.123456+00:00\",\"policy_version\":\"policy-1\",\"project_id\":\"demo-adk-wire\",\"resource_versions\":{},\"schema_version\":1,\"task_id\":\"apply-1\",\"trace_id\":\"trace-1\",\"user_id\":\"google-1\",\"workspace_id\":\"workspace-1\"}",
+            "changeset_hash": "d0e47a6a0f61b288edeb5bc6e907ddea1f6d61ab8b03c7aa7b3f691cd2bcc44a",
+            "content": "synthetic apply",
+            "created_at": "2026-08-28T20:02:17.123456+00:00",
+            "download_scopes": [],
+            "expires_at_ts": {
+              "nanoseconds": 123456000,
+              "seconds": 1787947637,
+              "type": "firestore/timestamp/1.0"
+            },
+            "firebase_uid": "firebase-1",
+            "google_sub": "google-1",
+            "intent": "apply",
+            "owner_google_subject": "google-1",
+            "plan": {
+              "changeset_hash": "d0e47a6a0f61b288edeb5bc6e907ddea1f6d61ab8b03c7aa7b3f691cd2bcc44a"
+            },
+            "policy_version": "policy-1",
+            "project_id": "demo-adk-wire",
+            "request_hash": "f78b474b01abcf34d04473c0de9c93b69a327a920aa823bd43a96985310895c4",
+            "request_id": "request-f78b474b01abcf34d04473c0de9c93b6",
+            "required_approval": "exact_apply",
+            "required_approvals": [
+              "a27f5a7b-2369-42b3-9d56-2eced033d452",
+              "52307498-c8c1-462f-8898-6a6ae0c744e5"
+            ],
+            "resource_versions": {},
+            "schema_version": 1,
+            "scope": {},
+            "session_id": "eh2L-0SSE8HjNLVhk4ZkeEsR",
+            "state": "submitted",
+            "task_id": "apply-1",
+            "trace_id": "trace-1",
+            "user_id": "google-1",
+            "workspace_id": "workspace-1"
+          },
+          "mode": "create",
+          "path": "projects/demo-adk-wire/workspaces/workspace-1/members/firebase-1/requests/request-f78b474b01abcf34d04473c0de9c93b6"
+        },
+        {
+          "data": {
+            "action_scope": {},
+            "approval_hash": "576a0176e7bd478522889c7b20a60e8a77b706633865b9dde16fb6fda208c295",
+            "approval_id": "a27f5a7b-2369-42b3-9d56-2eced033d452",
+            "approval_type": "upload_run",
+            "approved_at": "2026-08-28T20:02:17.891189+00:00",
+            "approved_at_ts": {
+              "nanoseconds": 891189000,
+              "seconds": 1787947337,
+              "type": "firestore/timestamp/1.0"
+            },
+            "approver_firebase_uid": "firebase-1",
+            "approver_google_sub": "google-1",
+            "approver_id": "google-1",
+            "bound_digest_kind": "task_request",
+            "canonical_payload": "{\"action_scope\":{},\"approval_id\":\"a27f5a7b-2369-42b3-9d56-2eced033d452\",\"approved_at\":\"2026-08-28T20:02:17.891189+00:00\",\"approver_id\":\"google-1\",\"change_hash\":\"f78b474b01abcf34d04473c0de9c93b69a327a920aa823bd43a96985310895c4\",\"expires_at\":\"2026-08-28T20:07:17.123456+00:00\",\"policy_version\":\"policy-1\",\"project_id\":\"demo-adk-wire\",\"resource_versions\":{},\"schema_version\":1,\"task_id\":\"apply-1\",\"trace_id\":\"38438bff-dbac-4470-b18c-3f7662430cb8\",\"workspace_id\":\"workspace-1\"}",
+            "change_hash": "f78b474b01abcf34d04473c0de9c93b69a327a920aa823bd43a96985310895c4",
+            "descriptor_hash": "b52f09497b2ab096066f532953764d2cdfb6ad88d00d6ab3ac682491dade669e",
+            "destination": "control",
+            "expires_at": "2026-08-28T20:07:17.123456+00:00",
+            "expires_at_ts": {
+              "nanoseconds": 123456000,
+              "seconds": 1787947637,
+              "type": "firestore/timestamp/1.0"
+            },
+            "firebase_uid": "firebase-1",
+            "google_sub": "google-1",
+            "policy_version": "policy-1",
+            "project_id": "demo-adk-wire",
+            "request_id": "request-f78b474b01abcf34d04473c0de9c93b6",
+            "resource_versions": {},
+            "schema_version": 1,
+            "session_id": "eh2L-0SSE8HjNLVhk4ZkeEsR",
+            "task_id": "apply-1",
+            "trace_id": "38438bff-dbac-4470-b18c-3f7662430cb8",
+            "workspace_id": "workspace-1"
+          },
+          "mode": "create",
+          "path": "projects/demo-adk-wire/workspaces/workspace-1/members/firebase-1/requests/request-f78b474b01abcf34d04473c0de9c93b6/approvals/a27f5a7b-2369-42b3-9d56-2eced033d452"
+        },
+        {
+          "data": {
+            "action_scope": {},
+            "approval_hash": "35da7049e2270cd027341c8a452d7627a2d00d7679bbc9653c7eb1073079af3c",
+            "approval_id": "52307498-c8c1-462f-8898-6a6ae0c744e5",
+            "approval_type": "exact_apply",
+            "approved_at": "2026-08-28T20:02:17.891189+00:00",
+            "approved_at_ts": {
+              "nanoseconds": 891189000,
+              "seconds": 1787947337,
+              "type": "firestore/timestamp/1.0"
+            },
+            "approver_firebase_uid": "firebase-1",
+            "approver_google_sub": "google-1",
+            "approver_id": "google-1",
+            "bound_digest_kind": "changeset",
+            "canonical_payload": "{\"action_scope\":{},\"approval_id\":\"52307498-c8c1-462f-8898-6a6ae0c744e5\",\"approved_at\":\"2026-08-28T20:02:17.891189+00:00\",\"approver_id\":\"google-1\",\"change_hash\":\"d0e47a6a0f61b288edeb5bc6e907ddea1f6d61ab8b03c7aa7b3f691cd2bcc44a\",\"expires_at\":\"2026-08-28T20:07:17.123456+00:00\",\"policy_version\":\"policy-1\",\"project_id\":\"demo-adk-wire\",\"resource_versions\":{},\"schema_version\":1,\"task_id\":\"apply-1\",\"trace_id\":\"9bb68094-3d0d-408f-822a-b11d49747ef7\",\"workspace_id\":\"workspace-1\"}",
+            "change_hash": "d0e47a6a0f61b288edeb5bc6e907ddea1f6d61ab8b03c7aa7b3f691cd2bcc44a",
+            "descriptor_hash": "b0b16d4eeb75e3e128b773f5c106a96462ccd3bb46a8922ccf65d89b9b8b5fab",
+            "destination": "control",
+            "expires_at": "2026-08-28T20:07:17.123456+00:00",
+            "expires_at_ts": {
+              "nanoseconds": 123456000,
+              "seconds": 1787947637,
+              "type": "firestore/timestamp/1.0"
+            },
+            "firebase_uid": "firebase-1",
+            "google_sub": "google-1",
+            "policy_version": "policy-1",
+            "project_id": "demo-adk-wire",
+            "request_id": "request-f78b474b01abcf34d04473c0de9c93b6",
+            "resource_versions": {},
+            "schema_version": 1,
+            "session_id": "eh2L-0SSE8HjNLVhk4ZkeEsR",
+            "task_id": "apply-1",
+            "trace_id": "9bb68094-3d0d-408f-822a-b11d49747ef7",
+            "workspace_id": "workspace-1"
+          },
+          "mode": "create",
+          "path": "projects/demo-adk-wire/workspaces/workspace-1/members/firebase-1/requests/request-f78b474b01abcf34d04473c0de9c93b6/approvals/52307498-c8c1-462f-8898-6a6ae0c744e5"
+        }
+      ]
+    }
+  },
+  "apply_reconcile_preview": {
+    "stage": "preview",
+    "operation_id": "reconcile-read-d0ae0e41f26253dd89906508895a8acb",
+    "descriptor_hash": "13a636a2cadb6ffeaf1804b46ff0bcccb28a460ab60392e0e79d9d01981b1b06",
+    "target_operation_id": "request-f78b474b01abcf34d04473c0de9c93b6",
+    "target_descriptor_hash": "842b0c46c2de10c499dd5c1596bd303bb63d1762c91cc2004b0b7bbec7f1395e",
+    "paths": [
+      "projects/demo-adk-wire/workspaces/workspace-1/members/firebase-1/requests/request-f78b474b01abcf34d04473c0de9c93b6",
+      "projects/demo-adk-wire/workspaces/workspace-1/members/firebase-1/requests/request-f78b474b01abcf34d04473c0de9c93b6/approvals/a27f5a7b-2369-42b3-9d56-2eced033d452",
+      "projects/demo-adk-wire/workspaces/workspace-1/members/firebase-1/requests/request-f78b474b01abcf34d04473c0de9c93b6/approvals/52307498-c8c1-462f-8898-6a6ae0c744e5"
+    ],
+    "database": "control",
+    "expires_at": "2026-08-28T20:07:17.123456+00:00",
+    "transfer": {
+      "sdk_calls": 0,
+      "documents": 0,
+      "bytes": 0
+    }
+  },
+  "apply_reconcile_consent": {
+    "stage": "instruction",
+    "operation_id": "reconcile-read-d0ae0e41f26253dd89906508895a8acb",
+    "descriptor_hash": "13a636a2cadb6ffeaf1804b46ff0bcccb28a460ab60392e0e79d9d01981b1b06",
+    "instruction": {
+      "bounds": {
+        "max_bytes": 1000000,
+        "max_documents": 500
+      },
+      "database": "control",
+      "descriptor": {
+        "database": "control",
+        "expires_at": "2026-08-28T20:07:17.123456+00:00",
+        "firebase_uid": "firebase-1",
+        "google_subject": "google-1",
+        "kind": "reconciliation_read",
+        "paths": [
+          "projects/demo-adk-wire/workspaces/workspace-1/members/firebase-1/requests/request-f78b474b01abcf34d04473c0de9c93b6",
+          "projects/demo-adk-wire/workspaces/workspace-1/members/firebase-1/requests/request-f78b474b01abcf34d04473c0de9c93b6/approvals/a27f5a7b-2369-42b3-9d56-2eced033d452",
+          "projects/demo-adk-wire/workspaces/workspace-1/members/firebase-1/requests/request-f78b474b01abcf34d04473c0de9c93b6/approvals/52307498-c8c1-462f-8898-6a6ae0c744e5"
+        ],
+        "project_id": "demo-adk-wire",
+        "session_id": "eh2L-0SSE8HjNLVhk4ZkeEsR",
+        "target_descriptor_hash": "842b0c46c2de10c499dd5c1596bd303bb63d1762c91cc2004b0b7bbec7f1395e",
+        "target_operation_id": "request-f78b474b01abcf34d04473c0de9c93b6",
+        "task_id": "",
+        "workspace_id": "workspace-1"
+      },
+      "descriptor_hash": "13a636a2cadb6ffeaf1804b46ff0bcccb28a460ab60392e0e79d9d01981b1b06",
+      "firebase_uid": "firebase-1",
+      "method": "getDoc",
+      "namespace": "control",
+      "operation_id": "reconcile-read-d0ae0e41f26253dd89906508895a8acb",
+      "owner_google_subject": "google-1",
+      "path": "projects/demo-adk-wire/workspaces/workspace-1/members/firebase-1/requests/request-f78b474b01abcf34d04473c0de9c93b6",
+      "payload": {
+        "database": "control",
+        "method": "getDoc",
+        "path": "projects/demo-adk-wire/workspaces/workspace-1/members/firebase-1/requests/request-f78b474b01abcf34d04473c0de9c93b6",
+        "read_scope": "reconciliation",
+        "reads": [
+          {
+            "method": "getDoc",
+            "path": "projects/demo-adk-wire/workspaces/workspace-1/members/firebase-1/requests/request-f78b474b01abcf34d04473c0de9c93b6",
+            "whole_document": true
+          },
+          {
+            "method": "getDoc",
+            "path": "projects/demo-adk-wire/workspaces/workspace-1/members/firebase-1/requests/request-f78b474b01abcf34d04473c0de9c93b6/approvals/a27f5a7b-2369-42b3-9d56-2eced033d452",
+            "whole_document": true
+          },
+          {
+            "method": "getDoc",
+            "path": "projects/demo-adk-wire/workspaces/workspace-1/members/firebase-1/requests/request-f78b474b01abcf34d04473c0de9c93b6/approvals/52307498-c8c1-462f-8898-6a6ae0c744e5",
+            "whole_document": true
+          }
+        ],
+        "whole_document": true
+      },
+      "payload_hash": "d50e78bc094d907e292b51538a723e4230b4e7e9e028221c732384011e879b86",
+      "project_id": "demo-adk-wire",
+      "read_scope": "reconciliation",
+      "reads": [
+        {
+          "method": "getDoc",
+          "path": "projects/demo-adk-wire/workspaces/workspace-1/members/firebase-1/requests/request-f78b474b01abcf34d04473c0de9c93b6",
+          "whole_document": true
+        },
+        {
+          "method": "getDoc",
+          "path": "projects/demo-adk-wire/workspaces/workspace-1/members/firebase-1/requests/request-f78b474b01abcf34d04473c0de9c93b6/approvals/a27f5a7b-2369-42b3-9d56-2eced033d452",
+          "whole_document": true
+        },
+        {
+          "method": "getDoc",
+          "path": "projects/demo-adk-wire/workspaces/workspace-1/members/firebase-1/requests/request-f78b474b01abcf34d04473c0de9c93b6/approvals/52307498-c8c1-462f-8898-6a6ae0c744e5",
+          "whole_document": true
+        }
+      ],
+      "sdk": "firebase/firestore/lite",
+      "session_id": "eh2L-0SSE8HjNLVhk4ZkeEsR",
+      "version": 1,
+      "whole_document": true,
+      "workspace_id": "workspace-1"
+    }
+  },
+  "history_preview": {
+    "stage": "preview",
+    "operation_id": "history-preview-a40faabf76471743345649aac2c2f01d",
+    "descriptor_hash": "b2dcaadb57471d6c11603ae24b0a9f6687742462a626662a79b79c3f2fad7cd5",
+    "payload_hash": "ab9f802e52a44e1cb0ba168715e6560bbd34e967e9cfb3296102fcbbe362c176",
+    "project_id": "demo-adk-wire",
+    "workspace_id": "workspace-1",
+    "task_id": "history-1",
+    "owner_google_subject": "google-1",
+    "firebase_uid": "firebase-1",
+    "scope": {
+      "kind": "history_upload",
+      "event_ids": [
+        "event-1"
+      ]
+    },
+    "destination": "control",
+    "records": [
+      {
+        "schema_version": 1,
+        "event_id": "event-1",
+        "task_id": "history-1",
+        "project_id": "demo-adk-wire",
+        "workspace_id": "workspace-1",
+        "event_type": "synthetic",
+        "actor_id": "runtime-1",
+        "details": {
+          "10": "ten",
+          "2": "two",
+          "nested_ts": "keep exactly",
+          "microseconds": "2026-08-28T20:02:17.123456+00:00"
+        },
+        "resource_versions": {},
+        "policy_version": "policy-1",
+        "occurred_at": "2026-08-28T20:02:17.123456+00:00",
+        "trace_id": "trace-1"
+      }
+    ],
+    "event_ids": [
+      "event-1"
+    ],
+    "expires_at": "2026-08-28T20:07:17.123456+00:00",
+    "transfer": {
+      "sdk_calls": 0,
+      "documents": 0,
+      "bytes": 0
+    }
+  },
+  "history_consent": {
+    "stage": "instruction",
+    "operation_id": "history-ab9f802e52a44e1cb0ba168715e6560b",
+    "descriptor_hash": "37896dc71024c81a43c0f5bad9b4ce8406dd771b722b05bfcc4ee794ed00ea54",
+    "instruction": {
+      "bounds": {
+        "max_bytes": 1000000,
+        "max_documents": 500
+      },
+      "database": "control",
+      "descriptor": {
+        "approval_id": "eb68db62-f19c-4745-a347-a6cd502a1838",
+        "event_hashes": [
+          "6c4b45e970e68a7b7aec65a84aa15fb2285805559efd905afb020256003d3960"
+        ],
+        "event_ids": [
+          "event-1"
+        ],
+        "expires_at": "2026-08-28T20:07:17.123456+00:00",
+        "firebase_uid": "firebase-1",
+        "google_subject": "google-1",
+        "kind": "history_upload",
+        "payload_hash": "ab9f802e52a44e1cb0ba168715e6560bbd34e967e9cfb3296102fcbbe362c176",
+        "project_id": "demo-adk-wire",
+        "session_id": "eh2L-0SSE8HjNLVhk4ZkeEsR",
+        "task_id": "history-1",
+        "workspace_id": "workspace-1"
+      },
+      "descriptor_hash": "37896dc71024c81a43c0f5bad9b4ce8406dd771b722b05bfcc4ee794ed00ea54",
+      "firebase_uid": "firebase-1",
+      "method": "writeBatch",
+      "namespace": "control",
+      "operation_id": "history-ab9f802e52a44e1cb0ba168715e6560b",
+      "owner_google_subject": "google-1",
+      "payload": {
+        "database": "control",
+        "method": "writeBatch",
+        "writes": [
+          {
+            "data": {
+              "approval": {
+                "action_scope": {
+                  "event_ids": [
+                    "event-1"
+                  ],
+                  "kind": "history_upload"
+                },
+                "approval_id": "eb68db62-f19c-4745-a347-a6cd502a1838",
+                "approved_at": "2026-08-28T20:02:18.061638+00:00",
+                "approved_at_ts": {
+                  "nanoseconds": 61638000,
+                  "seconds": 1787947338,
+                  "type": "firestore/timestamp/1.0"
+                },
+                "approver_id": "google-1",
+                "canonical_payload": "{\"action_scope\":{\"event_ids\":[\"event-1\"],\"kind\":\"history_upload\"},\"approval_id\":\"eb68db62-f19c-4745-a347-a6cd502a1838\",\"approved_at\":\"2026-08-28T20:02:18.061638+00:00\",\"approver_id\":\"google-1\",\"change_hash\":\"ab9f802e52a44e1cb0ba168715e6560bbd34e967e9cfb3296102fcbbe362c176\",\"expires_at\":\"2026-08-28T20:07:17.123456+00:00\",\"policy_version\":\"policy-1\",\"project_id\":\"demo-adk-wire\",\"resource_versions\":{},\"schema_version\":1,\"task_id\":\"history-1\",\"trace_id\":\"900e7cce-c1db-4f86-9eb2-f4482e6a9cb1\",\"workspace_id\":\"workspace-1\"}",
+                "change_hash": "ab9f802e52a44e1cb0ba168715e6560bbd34e967e9cfb3296102fcbbe362c176",
+                "descriptor_hash": "b2dcaadb57471d6c11603ae24b0a9f6687742462a626662a79b79c3f2fad7cd5",
+                "destination": "control",
+                "expires_at": "2026-08-28T20:07:17.123456+00:00",
+                "policy_version": "policy-1",
+                "project_id": "demo-adk-wire",
+                "resource_versions": {},
+                "schema_version": 1,
+                "session_id": "eh2L-0SSE8HjNLVhk4ZkeEsR",
+                "task_id": "history-1",
+                "trace_id": "900e7cce-c1db-4f86-9eb2-f4482e6a9cb1",
+                "workspace_id": "workspace-1"
+              },
+              "approval_descriptor_hash": "b2dcaadb57471d6c11603ae24b0a9f6687742462a626662a79b79c3f2fad7cd5",
+              "approval_hash": "08e49c057eb7cbae3ab8d63144df10a4e8924c518f6f302dba6f1d406b08d32b",
+              "canonical_payload": "[{\"actor_id\":\"runtime-1\",\"details\":{\"10\":\"ten\",\"2\":\"two\",\"microseconds\":\"2026-08-28T20:02:17.123456+00:00\",\"nested_ts\":\"keep exactly\"},\"event_id\":\"event-1\",\"event_type\":\"synthetic\",\"occurred_at\":\"2026-08-28T20:02:17.123456+00:00\",\"policy_version\":\"policy-1\",\"project_id\":\"demo-adk-wire\",\"resource_versions\":{},\"schema_version\":1,\"task_id\":\"history-1\",\"trace_id\":\"trace-1\",\"workspace_id\":\"workspace-1\"}]",
+              "event_ids": [
+                "event-1"
+              ],
+              "events": [
+                {
+                  "actor_id": "runtime-1",
+                  "details": {
+                    "10": "ten",
+                    "2": "two",
+                    "microseconds": "2026-08-28T20:02:17.123456+00:00",
+                    "nested_ts": "keep exactly"
+                  },
+                  "event_id": "event-1",
+                  "event_type": "synthetic",
+                  "occurred_at": "2026-08-28T20:02:17.123456+00:00",
+                  "policy_version": "policy-1",
+                  "project_id": "demo-adk-wire",
+                  "resource_versions": {},
+                  "schema_version": 1,
+                  "task_id": "history-1",
+                  "trace_id": "trace-1",
+                  "workspace_id": "workspace-1"
+                }
+              ],
+              "expires_at": "2026-08-28T20:07:17.123456+00:00",
+              "expires_at_ts": {
+                "nanoseconds": 123456000,
+                "seconds": 1787947637,
+                "type": "firestore/timestamp/1.0"
+              },
+              "export_id": "history-ab9f802e52a44e1cb0ba168715e6560b",
+              "firebase_uid": "firebase-1",
+              "google_sub": "google-1",
+              "kind": "history_upload",
+              "origin": "local",
+              "owner_google_subject": "google-1",
+              "payload_hash": "ab9f802e52a44e1cb0ba168715e6560bbd34e967e9cfb3296102fcbbe362c176",
+              "project_id": "demo-adk-wire",
+              "schema_version": 1,
+              "session_id": "eh2L-0SSE8HjNLVhk4ZkeEsR",
+              "task_id": "history-1",
+              "workspace_id": "workspace-1"
+            },
+            "mode": "create",
+            "path": "projects/demo-adk-wire/workspaces/workspace-1/members/firebase-1/exports/history-ab9f802e52a44e1cb0ba168715e6560b"
+          }
+        ]
+      },
+      "payload_hash": "26b87d9871023abef29b3d80eed0cd1d84bad25f911b7e35cc234c0d12fa346b",
+      "project_id": "demo-adk-wire",
+      "sdk": "firebase/firestore/lite",
+      "session_id": "eh2L-0SSE8HjNLVhk4ZkeEsR",
+      "version": 1,
+      "workspace_id": "workspace-1",
+      "writes": [
+        {
+          "data": {
+            "approval": {
+              "action_scope": {
+                "event_ids": [
+                  "event-1"
+                ],
+                "kind": "history_upload"
+              },
+              "approval_id": "eb68db62-f19c-4745-a347-a6cd502a1838",
+              "approved_at": "2026-08-28T20:02:18.061638+00:00",
+              "approved_at_ts": {
+                "nanoseconds": 61638000,
+                "seconds": 1787947338,
+                "type": "firestore/timestamp/1.0"
+              },
+              "approver_id": "google-1",
+              "canonical_payload": "{\"action_scope\":{\"event_ids\":[\"event-1\"],\"kind\":\"history_upload\"},\"approval_id\":\"eb68db62-f19c-4745-a347-a6cd502a1838\",\"approved_at\":\"2026-08-28T20:02:18.061638+00:00\",\"approver_id\":\"google-1\",\"change_hash\":\"ab9f802e52a44e1cb0ba168715e6560bbd34e967e9cfb3296102fcbbe362c176\",\"expires_at\":\"2026-08-28T20:07:17.123456+00:00\",\"policy_version\":\"policy-1\",\"project_id\":\"demo-adk-wire\",\"resource_versions\":{},\"schema_version\":1,\"task_id\":\"history-1\",\"trace_id\":\"900e7cce-c1db-4f86-9eb2-f4482e6a9cb1\",\"workspace_id\":\"workspace-1\"}",
+              "change_hash": "ab9f802e52a44e1cb0ba168715e6560bbd34e967e9cfb3296102fcbbe362c176",
+              "descriptor_hash": "b2dcaadb57471d6c11603ae24b0a9f6687742462a626662a79b79c3f2fad7cd5",
+              "destination": "control",
+              "expires_at": "2026-08-28T20:07:17.123456+00:00",
+              "policy_version": "policy-1",
+              "project_id": "demo-adk-wire",
+              "resource_versions": {},
+              "schema_version": 1,
+              "session_id": "eh2L-0SSE8HjNLVhk4ZkeEsR",
+              "task_id": "history-1",
+              "trace_id": "900e7cce-c1db-4f86-9eb2-f4482e6a9cb1",
+              "workspace_id": "workspace-1"
+            },
+            "approval_descriptor_hash": "b2dcaadb57471d6c11603ae24b0a9f6687742462a626662a79b79c3f2fad7cd5",
+            "approval_hash": "08e49c057eb7cbae3ab8d63144df10a4e8924c518f6f302dba6f1d406b08d32b",
+            "canonical_payload": "[{\"actor_id\":\"runtime-1\",\"details\":{\"10\":\"ten\",\"2\":\"two\",\"microseconds\":\"2026-08-28T20:02:17.123456+00:00\",\"nested_ts\":\"keep exactly\"},\"event_id\":\"event-1\",\"event_type\":\"synthetic\",\"occurred_at\":\"2026-08-28T20:02:17.123456+00:00\",\"policy_version\":\"policy-1\",\"project_id\":\"demo-adk-wire\",\"resource_versions\":{},\"schema_version\":1,\"task_id\":\"history-1\",\"trace_id\":\"trace-1\",\"workspace_id\":\"workspace-1\"}]",
+            "event_ids": [
+              "event-1"
+            ],
+            "events": [
+              {
+                "actor_id": "runtime-1",
+                "details": {
+                  "10": "ten",
+                  "2": "two",
+                  "microseconds": "2026-08-28T20:02:17.123456+00:00",
+                  "nested_ts": "keep exactly"
+                },
+                "event_id": "event-1",
+                "event_type": "synthetic",
+                "occurred_at": "2026-08-28T20:02:17.123456+00:00",
+                "policy_version": "policy-1",
+                "project_id": "demo-adk-wire",
+                "resource_versions": {},
+                "schema_version": 1,
+                "task_id": "history-1",
+                "trace_id": "trace-1",
+                "workspace_id": "workspace-1"
+              }
+            ],
+            "expires_at": "2026-08-28T20:07:17.123456+00:00",
+            "expires_at_ts": {
+              "nanoseconds": 123456000,
+              "seconds": 1787947637,
+              "type": "firestore/timestamp/1.0"
+            },
+            "export_id": "history-ab9f802e52a44e1cb0ba168715e6560b",
+            "firebase_uid": "firebase-1",
+            "google_sub": "google-1",
+            "kind": "history_upload",
+            "origin": "local",
+            "owner_google_subject": "google-1",
+            "payload_hash": "ab9f802e52a44e1cb0ba168715e6560bbd34e967e9cfb3296102fcbbe362c176",
+            "project_id": "demo-adk-wire",
+            "schema_version": 1,
+            "session_id": "eh2L-0SSE8HjNLVhk4ZkeEsR",
+            "task_id": "history-1",
+            "workspace_id": "workspace-1"
+          },
+          "mode": "create",
+          "path": "projects/demo-adk-wire/workspaces/workspace-1/members/firebase-1/exports/history-ab9f802e52a44e1cb0ba168715e6560b"
+        }
+      ]
+    }
+  },
+  "reconcile_preview": {
+    "stage": "preview",
+    "operation_id": "reconcile-read-808c1cc67d39cb51818fec38d974411f",
+    "descriptor_hash": "55ffcf0cea3bb818dc590e36d6127dc28256fc1c44351e7e7cf981cd0865671c",
+    "target_operation_id": "history-ab9f802e52a44e1cb0ba168715e6560b",
+    "target_descriptor_hash": "37896dc71024c81a43c0f5bad9b4ce8406dd771b722b05bfcc4ee794ed00ea54",
+    "paths": [
+      "projects/demo-adk-wire/workspaces/workspace-1/members/firebase-1/exports/history-ab9f802e52a44e1cb0ba168715e6560b"
+    ],
+    "database": "control",
+    "expires_at": "2026-08-28T20:07:17.123456+00:00",
+    "transfer": {
+      "sdk_calls": 0,
+      "documents": 0,
+      "bytes": 0
+    }
+  },
+  "reconcile_consent": {
+    "stage": "instruction",
+    "operation_id": "reconcile-read-808c1cc67d39cb51818fec38d974411f",
+    "descriptor_hash": "55ffcf0cea3bb818dc590e36d6127dc28256fc1c44351e7e7cf981cd0865671c",
+    "instruction": {
+      "bounds": {
+        "max_bytes": 1000000,
+        "max_documents": 500
+      },
+      "database": "control",
+      "descriptor": {
+        "database": "control",
+        "expires_at": "2026-08-28T20:07:17.123456+00:00",
+        "firebase_uid": "firebase-1",
+        "google_subject": "google-1",
+        "kind": "reconciliation_read",
+        "paths": [
+          "projects/demo-adk-wire/workspaces/workspace-1/members/firebase-1/exports/history-ab9f802e52a44e1cb0ba168715e6560b"
+        ],
+        "project_id": "demo-adk-wire",
+        "session_id": "eh2L-0SSE8HjNLVhk4ZkeEsR",
+        "target_descriptor_hash": "37896dc71024c81a43c0f5bad9b4ce8406dd771b722b05bfcc4ee794ed00ea54",
+        "target_operation_id": "history-ab9f802e52a44e1cb0ba168715e6560b",
+        "task_id": "history-1",
+        "workspace_id": "workspace-1"
+      },
+      "descriptor_hash": "55ffcf0cea3bb818dc590e36d6127dc28256fc1c44351e7e7cf981cd0865671c",
+      "firebase_uid": "firebase-1",
+      "method": "getDoc",
+      "namespace": "control",
+      "operation_id": "reconcile-read-808c1cc67d39cb51818fec38d974411f",
+      "owner_google_subject": "google-1",
+      "path": "projects/demo-adk-wire/workspaces/workspace-1/members/firebase-1/exports/history-ab9f802e52a44e1cb0ba168715e6560b",
+      "payload": {
+        "database": "control",
+        "method": "getDoc",
+        "path": "projects/demo-adk-wire/workspaces/workspace-1/members/firebase-1/exports/history-ab9f802e52a44e1cb0ba168715e6560b",
+        "read_scope": "reconciliation",
+        "reads": [
+          {
+            "method": "getDoc",
+            "path": "projects/demo-adk-wire/workspaces/workspace-1/members/firebase-1/exports/history-ab9f802e52a44e1cb0ba168715e6560b",
+            "whole_document": true
+          }
+        ],
+        "whole_document": true
+      },
+      "payload_hash": "ebea7dd516c1e9785ea775bc6e0f8e031d8f71d119b4ad8c11ab3e1d28911fb7",
+      "project_id": "demo-adk-wire",
+      "read_scope": "reconciliation",
+      "reads": [
+        {
+          "method": "getDoc",
+          "path": "projects/demo-adk-wire/workspaces/workspace-1/members/firebase-1/exports/history-ab9f802e52a44e1cb0ba168715e6560b",
+          "whole_document": true
+        }
+      ],
+      "sdk": "firebase/firestore/lite",
+      "session_id": "eh2L-0SSE8HjNLVhk4ZkeEsR",
+      "version": 1,
+      "whole_document": true,
+      "workspace_id": "workspace-1"
+    }
+  },
+  "manifest": {
+    "schema_version": 1,
+    "kind": "manifest",
+    "result_id": "12e29e8b655d84aea65b1f3971e68fa3735da917e0ecf9aa1bbe2fdce117dc72",
+    "result_hash": "12e29e8b655d84aea65b1f3971e68fa3735da917e0ecf9aa1bbe2fdce117dc72",
+    "scope": [
+      "history"
+    ],
+    "project_id": "demo-adk-wire",
+    "workspace_id": "workspace-1",
+    "firebase_uid": "firebase-1",
+    "google_subject": "google-1",
+    "task_id": "history-1",
+    "available": true,
+    "expires_at": "2026-08-28T21:02:17.123456+00:00",
+    "expires_at_ts": {
+      "type": "firestore/timestamp/1.0",
+      "seconds": 1787950937,
+      "nanoseconds": 123456000
+    }
+  },
+  "result_envelope": {
+    "schema_version": 1,
+    "result_id": "12e29e8b655d84aea65b1f3971e68fa3735da917e0ecf9aa1bbe2fdce117dc72",
+    "result_hash": "12e29e8b655d84aea65b1f3971e68fa3735da917e0ecf9aa1bbe2fdce117dc72",
+    "payload": {
+      "kind": "history_result",
+      "project_id": "demo-adk-wire",
+      "workspace_id": "workspace-1",
+      "firebase_uid": "firebase-1",
+      "google_subject": "google-1",
+      "task_id": "history-1",
+      "scope": [
+        "history"
+      ],
+      "expires_at": "2026-08-28T21:02:17.123456+00:00",
+      "events": [
+        {
+          "schema_version": 1,
+          "event_id": "event-1",
+          "task_id": "history-1",
+          "project_id": "demo-adk-wire",
+          "workspace_id": "workspace-1",
+          "event_type": "synthetic",
+          "actor_id": "runtime-1",
+          "details": {
+            "10": "ten",
+            "2": "two",
+            "nested_ts": "keep exactly",
+            "microseconds": "2026-08-28T20:02:17.123456+00:00"
+          },
+          "resource_versions": {},
+          "policy_version": "policy-1",
+          "occurred_at": "2026-08-28T20:02:17.123456+00:00",
+          "trace_id": "trace-1"
+        }
+      ]
+    },
+    "canonical_payload": "{\"events\":[{\"actor_id\":\"runtime-1\",\"details\":{\"10\":\"ten\",\"2\":\"two\",\"microseconds\":\"2026-08-28T20:02:17.123456+00:00\",\"nested_ts\":\"keep exactly\"},\"event_id\":\"event-1\",\"event_type\":\"synthetic\",\"occurred_at\":\"2026-08-28T20:02:17.123456+00:00\",\"policy_version\":\"policy-1\",\"project_id\":\"demo-adk-wire\",\"resource_versions\":{},\"schema_version\":1,\"task_id\":\"history-1\",\"trace_id\":\"trace-1\",\"workspace_id\":\"workspace-1\"}],\"expires_at\":\"2026-08-28T21:02:17.123456+00:00\",\"firebase_uid\":\"firebase-1\",\"google_subject\":\"google-1\",\"kind\":\"history_result\",\"project_id\":\"demo-adk-wire\",\"scope\":[\"history\"],\"task_id\":\"history-1\",\"workspace_id\":\"workspace-1\"}",
+    "expires_at_ts": {
+      "type": "firestore/timestamp/1.0",
+      "seconds": 1787950937,
+      "nanoseconds": 123456000
+    }
+  },
+  "manifest_preview": {
+    "stage": "preview",
+    "operation_id": "manifest-preview-f8765ed779785bf2f64174f2ff6088fc",
+    "descriptor_hash": "f8765ed779785bf2f64174f2ff6088fca39a9e41477d52b89d4a7a5272cc3761",
+    "path": "projects/demo-adk-wire/workspaces/workspace-1/users/firebase-1/tasks/history-1/manifests/latest",
+    "fields": [
+      "schema_version",
+      "kind",
+      "result_id",
+      "result_hash",
+      "scope",
+      "project_id",
+      "workspace_id",
+      "firebase_uid",
+      "google_subject",
+      "task_id",
+      "available",
+      "expires_at",
+      "expires_at_ts"
+    ],
+    "expires_at": "2026-08-28T20:04:17.123456+00:00",
+    "transfer": {
+      "sdk_calls": 0,
+      "documents": 0,
+      "bytes": 0
+    }
+  },
+  "manifest_consent": {
+    "stage": "instruction",
+    "operation_id": "manifest-f8765ed779785bf2f64174f2ff6088fc",
+    "descriptor_hash": "f8765ed779785bf2f64174f2ff6088fca39a9e41477d52b89d4a7a5272cc3761",
+    "instruction": {
+      "bounds": {
+        "max_bytes": 1000000,
+        "max_documents": 500
+      },
+      "database": "runtime",
+      "descriptor": {
+        "attempt_id": "e294f53dd47a4a84afdfee75f186edc6",
+        "expires_at": "2026-08-28T20:04:17.123456+00:00",
+        "fields": [
+          "schema_version",
+          "kind",
+          "result_id",
+          "result_hash",
+          "scope",
+          "project_id",
+          "workspace_id",
+          "firebase_uid",
+          "google_subject",
+          "task_id",
+          "available",
+          "expires_at",
+          "expires_at_ts"
+        ],
+        "firebase_uid": "firebase-1",
+        "google_subject": "google-1",
+        "kind": "bounded_manifest_read",
+        "path": "projects/demo-adk-wire/workspaces/workspace-1/users/firebase-1/tasks/history-1/manifests/latest",
+        "project_id": "demo-adk-wire",
+        "session_id": "eh2L-0SSE8HjNLVhk4ZkeEsR",
+        "task_id": "history-1",
+        "workspace_id": "workspace-1"
+      },
+      "descriptor_hash": "f8765ed779785bf2f64174f2ff6088fca39a9e41477d52b89d4a7a5272cc3761",
+      "fields": [
+        "schema_version",
+        "kind",
+        "result_id",
+        "result_hash",
+        "scope",
+        "project_id",
+        "workspace_id",
+        "firebase_uid",
+        "google_subject",
+        "task_id",
+        "available",
+        "expires_at",
+        "expires_at_ts"
+      ],
+      "firebase_uid": "firebase-1",
+      "method": "getDoc",
+      "namespace": "runtime",
+      "operation_id": "manifest-f8765ed779785bf2f64174f2ff6088fc",
+      "owner_google_subject": "google-1",
+      "path": "projects/demo-adk-wire/workspaces/workspace-1/users/firebase-1/tasks/history-1/manifests/latest",
+      "payload": {
+        "database": "runtime",
+        "fields": [
+          "schema_version",
+          "kind",
+          "result_id",
+          "result_hash",
+          "scope",
+          "project_id",
+          "workspace_id",
+          "firebase_uid",
+          "google_subject",
+          "task_id",
+          "available",
+          "expires_at",
+          "expires_at_ts"
+        ],
+        "method": "getDoc",
+        "path": "projects/demo-adk-wire/workspaces/workspace-1/users/firebase-1/tasks/history-1/manifests/latest",
+        "read_scope": "manifest",
+        "whole_document": true
+      },
+      "payload_hash": "9be761db913855cd4d6fa3437d495ca4f75f1d449f87730b7e489462a390499b",
+      "project_id": "demo-adk-wire",
+      "read_scope": "manifest",
+      "sdk": "firebase/firestore/lite",
+      "session_id": "eh2L-0SSE8HjNLVhk4ZkeEsR",
+      "version": 1,
+      "whole_document": true,
+      "workspace_id": "workspace-1"
+    }
+  },
+  "download_preview": {
+    "stage": "preview",
+    "operation_id": "result-preview-139a5189a0a7ec1275d5363d7f56bfaf",
+    "descriptor_hash": "257a22bd75efd37d69a871acd49404a50c8718ca45467f0f9f85061e5e5ab238",
+    "result_id": "12e29e8b655d84aea65b1f3971e68fa3735da917e0ecf9aa1bbe2fdce117dc72",
+    "result_hash": "12e29e8b655d84aea65b1f3971e68fa3735da917e0ecf9aa1bbe2fdce117dc72",
+    "scope": [
+      "history"
+    ],
+    "expires_at": "2026-08-28T20:06:17.123456+00:00",
+    "transfer": {
+      "sdk_calls": 0,
+      "documents": 0,
+      "bytes": 0
+    }
+  },
+  "download_consent": {
+    "stage": "instruction",
+    "operation_id": "result-12e29e8b655d84aea65b1f3971e68fa3735da917e0ecf9aa1bbe2fdce117dc72",
+    "descriptor_hash": "5e65864cc1233732bbdc0c93208125b21a766b1c4d5f8b1ce2c3baf5d113f1de",
+    "instruction": {
+      "bounds": {
+        "max_bytes": 1000000,
+        "max_documents": 500
+      },
+      "database": "runtime",
+      "descriptor": {
+        "expires_at": "2026-08-28T20:06:17.123456+00:00",
+        "firebase_uid": "firebase-1",
+        "google_subject": "google-1",
+        "kind": "exact_result_download",
+        "metadata_descriptor_hash": "f8765ed779785bf2f64174f2ff6088fca39a9e41477d52b89d4a7a5272cc3761",
+        "project_id": "demo-adk-wire",
+        "result_hash": "12e29e8b655d84aea65b1f3971e68fa3735da917e0ecf9aa1bbe2fdce117dc72",
+        "result_id": "12e29e8b655d84aea65b1f3971e68fa3735da917e0ecf9aa1bbe2fdce117dc72",
+        "scope": [
+          "history"
+        ],
+        "session_id": "eh2L-0SSE8HjNLVhk4ZkeEsR",
+        "task_id": "history-1",
+        "workspace_id": "workspace-1"
+      },
+      "descriptor_hash": "5e65864cc1233732bbdc0c93208125b21a766b1c4d5f8b1ce2c3baf5d113f1de",
+      "fields": [
+        "history"
+      ],
+      "firebase_uid": "firebase-1",
+      "method": "getDoc",
+      "namespace": "runtime",
+      "operation_id": "result-12e29e8b655d84aea65b1f3971e68fa3735da917e0ecf9aa1bbe2fdce117dc72",
+      "owner_google_subject": "google-1",
+      "path": "projects/demo-adk-wire/workspaces/workspace-1/users/firebase-1/tasks/history-1/results/12e29e8b655d84aea65b1f3971e68fa3735da917e0ecf9aa1bbe2fdce117dc72",
+      "payload": {
+        "database": "runtime",
+        "fields": [
+          "history"
+        ],
+        "method": "getDoc",
+        "path": "projects/demo-adk-wire/workspaces/workspace-1/users/firebase-1/tasks/history-1/results/12e29e8b655d84aea65b1f3971e68fa3735da917e0ecf9aa1bbe2fdce117dc72",
+        "read_scope": "exact_result",
+        "whole_document": true
+      },
+      "payload_hash": "187c1d7a098b6fb9515711ac04b23dd401664ca5ff26613f0c950947d5156f64",
+      "project_id": "demo-adk-wire",
+      "read_scope": "exact_result",
+      "sdk": "firebase/firestore/lite",
+      "session_id": "eh2L-0SSE8HjNLVhk4ZkeEsR",
+      "version": 1,
+      "whole_document": true,
+      "workspace_id": "workspace-1"
+    }
+  }
+}

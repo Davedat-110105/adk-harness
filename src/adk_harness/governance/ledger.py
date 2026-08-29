@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from collections.abc import Iterable, Mapping
 from datetime import UTC, datetime
 from typing import Any
 
-__all__ = ["FirestoreActionLedger"]
+__all__ = ["EvidenceConflict", "FirestoreActionLedger"]
 
 DEFAULT_DENYLIST = (
     "password",
@@ -18,6 +19,10 @@ DEFAULT_DENYLIST = (
     "credential",
     "authorization",
 )
+
+
+class EvidenceConflict(RuntimeError):
+    """An idempotency key was reused with different immutable evidence."""
 
 
 class FirestoreActionLedger:
@@ -34,6 +39,8 @@ class FirestoreActionLedger:
         client: Any | None = None,
         *,
         collection: str = "action_ledger",
+        evidence_collection: str = "policy_evidence",
+        owner_namespace: str | None = None,
         denylist: Iterable[str] = DEFAULT_DENYLIST,
         arg_allowlist: Mapping[str, Iterable[str]] | None = None,
     ) -> None:
@@ -46,6 +53,8 @@ class FirestoreActionLedger:
         """
         self._firestore_client = client
         self._collection_name = collection
+        self._evidence_collection_name = evidence_collection
+        self._owner_namespace = owner_namespace
         self._denylist = tuple(item.casefold() for item in denylist)
         self._arg_allowlist = {
             action: frozenset(keys) for action, keys in (arg_allowlist or {}).items()
@@ -119,6 +128,81 @@ class FirestoreActionLedger:
             .stream()
         )
         return [{"id": snapshot.id, **(snapshot.to_dict() or {})} for snapshot in entries]
+
+    def record_evidence(
+        self,
+        *,
+        actor: str,
+        approval_hash: str,
+        policy_version: str,
+        decision: str,
+        operation_id: str,
+        outcome: str,
+        idempotency_key: str,
+        trace_id: str,
+    ) -> str:
+        """Write unsampled immutable policy evidence.
+
+        This path requires an injected, explicitly configured runtime client
+        and owner namespace. Retries with byte-for-byte identical immutable
+        fields succeed; a conflicting reuse is surfaced for reconciliation.
+        """
+        if self._firestore_client is None:
+            raise RuntimeError("policy evidence requires an explicit runtime Firestore client")
+        if not self._owner_namespace:
+            raise ValueError("policy evidence requires an explicit owner namespace")
+        for name, value in {
+            "actor": actor,
+            "policy_version": policy_version,
+            "decision": decision,
+            "operation_id": operation_id,
+            "outcome": outcome,
+            "idempotency_key": idempotency_key,
+            "trace_id": trace_id,
+        }.items():
+            if not isinstance(value, str) or not value.strip() or len(value) > 512:
+                raise ValueError(f"{name} must be a bounded non-empty string")
+        if not isinstance(approval_hash, str) or not re.fullmatch(
+            r"[0-9a-fA-F]{64}", approval_hash
+        ):
+            raise ValueError("approval_hash must be a SHA-256 hexadecimal digest")
+        if decision not in {"allow", "deny", "hold"}:
+            raise ValueError("decision must be allow, deny, or hold")
+        immutable = {
+            "kind": "policy_evidence",
+            "owner_namespace": self._owner_namespace,
+            "idempotency_key": idempotency_key,
+            "actor": actor,
+            "approval_hash": approval_hash.lower(),
+            "policy_version": policy_version,
+            "decision": decision,
+            "operation_id": operation_id,
+            "outcome": outcome,
+            "trace_id": trace_id,
+        }
+        payload: dict[str, Any] = dict(immutable)
+        payload["recorded_at"] = datetime.now(UTC)
+        entry_id = hashlib.sha256(
+            ("policy-evidence:" + self._owner_namespace + ":" + idempotency_key).encode("utf-8")
+        ).hexdigest()
+        document = self._client().collection(self._evidence_collection_name).document(entry_id)
+        try:
+            document.create(payload)
+        except Exception as exc:
+            if not _is_already_exists(exc):
+                raise
+            snapshot = document.get()
+            if not snapshot.exists:
+                raise RuntimeError("existing policy evidence could not be read back") from exc
+            existing = snapshot.to_dict() or {}
+            existing_immutable = {
+                key: value for key, value in existing.items() if key != "recorded_at"
+            }
+            if existing_immutable != immutable:
+                raise EvidenceConflict(
+                    f"conflicting policy evidence for idempotency key {idempotency_key!r}"
+                ) from exc
+        return entry_id
 
     def _collection(self) -> Any:
         return self._client().collection(self._collection_name)
