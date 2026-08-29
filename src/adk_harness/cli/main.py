@@ -348,6 +348,7 @@ def main(argv: list[str] | None = None) -> int:
             "onboard",
             "readiness",
             "install-plugin",
+            "mcp",
         ),
         default="doctor",
     )
@@ -379,6 +380,10 @@ def main(argv: list[str] | None = None) -> int:
         return _logout(args)
     if args.command in {"ui", "onboard"}:
         return _ui(args)
+    if args.command == "mcp":
+        from adk_harness.workspace.mcp_stdio import serve
+
+        return serve(_build_auth(args.client_config))
     if args.command == "install-plugin":
         return _install_plugin(args)
     if args.command == "readiness":
