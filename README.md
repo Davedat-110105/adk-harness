@@ -38,7 +38,10 @@ started](docs/getting-started.md) for the local ADK example.
 lists the result under Settings, Customizations. Pass `--plugin-dir` to install
 somewhere else. Reinstalling replaces the previous copy.
 
-This one command needs no Python and no uv, so it also runs straight from npm:
+It also registers the MCP server in `~/.gemini/config/mcp_config.json`, keeping
+any other servers already listed there. Pass `--mcp-config` to write elsewhere.
+
+The copy alone needs no Python and no uv, so it also runs straight from npm:
 
 ```bash
 npx -y github:Davedat-110105/adk-harness install-plugin

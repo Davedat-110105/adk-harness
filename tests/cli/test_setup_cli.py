@@ -56,7 +56,19 @@ def test_cli_rejects_retired_commands() -> None:
 
 def test_install_plugin_copies_packaged_assets(tmp_path, capsys) -> None:
     destination = tmp_path / "plugins" / "adk-harness"
-    assert main(["install-plugin", "--plugin-dir", str(destination)]) == 0
+    config = tmp_path / "mcp_config.json"
+    assert (
+        main(
+            [
+                "install-plugin",
+                "--plugin-dir",
+                str(destination),
+                "--mcp-config",
+                str(config),
+            ]
+        )
+        == 0
+    )
     assert (destination / "plugin.json").is_file()
     assert (destination / "skills" / "governed-workspace" / "SKILL.md").is_file()
     assert (destination / "rules" / "governance.md").is_file()
@@ -68,6 +80,57 @@ def test_install_plugin_replaces_an_existing_installation(tmp_path) -> None:
     destination.mkdir()
     stale = destination / "mcp_config.json"
     stale.write_text("{}", encoding="utf-8")
-    assert main(["install-plugin", "--plugin-dir", str(destination)]) == 0
+    config = tmp_path / "mcp_config.json"
+    assert (
+        main(
+            ["install-plugin", "--plugin-dir", str(destination), "--mcp-config", str(config)]
+        )
+        == 0
+    )
     assert not stale.exists()
     assert (destination / "plugin.json").is_file()
+
+
+def test_install_plugin_registers_the_server_without_losing_others(tmp_path) -> None:
+    """Antigravity reads one shared file, so other people's servers must survive."""
+    config = tmp_path / "mcp_config.json"
+    config.write_text(
+        json.dumps({"mcpServers": {"someone-else": {"command": "/bin/true"}}}),
+        encoding="utf-8",
+    )
+
+    assert (
+        main(
+            [
+                "install-plugin",
+                "--plugin-dir",
+                str(tmp_path / "plugin"),
+                "--mcp-config",
+                str(config),
+            ]
+        )
+        == 0
+    )
+
+    servers = json.loads(config.read_text(encoding="utf-8"))["mcpServers"]
+    assert servers["someone-else"] == {"command": "/bin/true"}
+    assert servers["adk-harness"]["args"] == ["-m", "adk_harness", "mcp"]
+
+
+def test_install_plugin_creates_the_config_when_absent(tmp_path) -> None:
+    config = tmp_path / "nested" / "mcp_config.json"
+
+    assert (
+        main(
+            [
+                "install-plugin",
+                "--plugin-dir",
+                str(tmp_path / "plugin"),
+                "--mcp-config",
+                str(config),
+            ]
+        )
+        == 0
+    )
+
+    assert "adk-harness" in json.loads(config.read_text(encoding="utf-8"))["mcpServers"]

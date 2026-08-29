@@ -329,6 +329,36 @@ def _install_plugin(args: argparse.Namespace) -> int:
     for path in sorted(destination.rglob("*")):
         if path.is_file():
             print(f"  {path.relative_to(destination)}")
+    return _register_mcp_server(args)
+
+
+def _register_mcp_server(args: argparse.Namespace) -> int:
+    """Add this server to Antigravity's MCP configuration, keeping the rest."""
+    default = Path.home() / ".gemini" / "config" / "mcp_config.json"
+    path = Path(args.mcp_config).expanduser() if args.mcp_config else default
+    try:
+        config = json.loads(path.read_text(encoding="utf-8")) if path.is_file() else {}
+    except (OSError, json.JSONDecodeError) as exc:
+        print(f"the MCP configuration could not be read: {exc}", file=sys.stderr)
+        return 2
+    if not isinstance(config, dict):
+        print("the MCP configuration is not a JSON object", file=sys.stderr)
+        return 2
+    servers = config.get("mcpServers")
+    if not isinstance(servers, dict):
+        servers = {}
+    servers["adk-harness"] = {
+        "command": sys.executable,
+        "args": ["-m", "adk_harness", "mcp"],
+    }
+    config["mcpServers"] = servers
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
+    except OSError as exc:
+        print(f"the MCP configuration could not be written: {exc}", file=sys.stderr)
+        return 2
+    print(f"registered: {path}")
     return 0
 
 
@@ -369,6 +399,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--handoff", help="approved terraform_handoff JSON for readiness")
     parser.add_argument("--select-project", help="verified select_project checkpoint JSON")
     parser.add_argument("--plugin-dir", help="destination for install-plugin")
+    parser.add_argument("--mcp-config", help="Antigravity mcp_config.json to register in")
     args = parser.parse_args(argv)
     if args.command == "doctor":
         return asyncio.run(_doctor())
