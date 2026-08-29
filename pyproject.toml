@@ -48,6 +48,8 @@ dev = [
 
 [tool.hatch.build]
 exclude = [
+    # The dev copy of the generated bundle; the wheel takes it from ui/approval.
+    "src/adk_harness/ui/approval/dist/**",
     "**/.env",
     "**/.env.*",
     "**/.adk/**",
