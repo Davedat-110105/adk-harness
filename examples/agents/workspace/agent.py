@@ -90,12 +90,39 @@ class TeamPolicy:
         )
 
 
+class _NoKeyring:
+    """Stand in for an OS keyring that a container does not have.
+
+    It stores nothing, so anything needing a verified grant still fails closed.
+    The service can start and plan; it cannot act on somebody's Workspace.
+    """
+
+    priority = 1
+
+    def get_password(self, service: str, username: str) -> None:
+        return None
+
+    def set_password(self, service: str, username: str, password: str) -> None:
+        raise RuntimeError("this deployment has no credential store")
+
+    def delete_password(self, service: str, username: str) -> None:
+        raise RuntimeError("this deployment has no credential store")
+
+
+def _credential_store() -> SecureCredentialStore:
+    """Prefer the OS keyring, and start without one rather than not at all."""
+    try:
+        return SecureCredentialStore()
+    except RuntimeError:
+        return SecureCredentialStore(keyring_module=_NoKeyring())
+
+
 async def _build():
     armor = ContentArmor(allowed_email_domains=ALLOWED_DOMAINS)
     subject = os.environ.get("ADK_GOOGLE_SUBJECT", "user:local")
     authenticator = GoogleAuthenticator(
         client_config={"installed": {"client_id": os.environ.get("GOOGLE_CLIENT_ID", "example")}},
-        store=SecureCredentialStore(),
+        store=_credential_store(),
     )
     consent = WorkspaceConsent(
         subject=subject,
