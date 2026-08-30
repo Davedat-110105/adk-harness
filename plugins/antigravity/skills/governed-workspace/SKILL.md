@@ -39,19 +39,14 @@ the change hash.
 **held** — nothing ran. Say what was about to happen in their terms: who would
 see it, what it would say, when.
 
-When the result carries an `approval_widget`, embed that file inline so the
-person can decide without leaving the chat:
+The approval page opens in the person's browser by itself. Say in one line
+what is waiting for them, and give them `approval_url` as a link in case the
+page did not come to the front.
 
-```
-<agent-embed src="file:///the/path/from/approval_widget"></agent-embed>
-```
-
-Embed it exactly as given. Do not rewrite the file, do not change the buttons,
-and do not build your own card. It talks to the harness directly, which is why
-your approval cannot be forged.
-
-`approval_url` is the same decision as a link, for when an inline card will not
-render.
+Never print the raw result. `approval_widget` is a file path and means nothing
+to a person. If you embed anything, embed that file exactly as given and send
+the message before calling `await_approval`, because a card cannot be seen
+while you are blocked in a tool call.
 
 Then, in the same reply, call `await_approval`. It returns the moment they
 press a button, so they never have to type. Order matters: the card must be in

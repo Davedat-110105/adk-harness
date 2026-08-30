@@ -591,3 +591,25 @@ async def test_await_approval_asks_to_be_called_again_rather_than_hanging(
 
     assert answer["answered"] is False
     assert answer["retry"] is True
+
+
+async def test_the_approval_page_is_opened_for_the_person(
+    connected: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The model sometimes prints the path instead of rendering the card."""
+    server, state, _calls = connected
+    opened: list[str] = []
+    monkeypatch.setattr(state.approvals, "show", lambda url: opened.append(url) or True)
+
+    result = await _call_tool(server, "calendar_events_insert", EVENT, None)
+
+    assert result["approval_opened_in_browser"] is True
+    assert opened == [result["approval_url"]]
+
+
+def test_opening_can_be_turned_off(monkeypatch: pytest.MonkeyPatch) -> None:
+    from adk_harness.workspace.approval_page import ApprovalServer
+
+    monkeypatch.setenv("ADK_HARNESS_NO_BROWSER", "1")
+
+    assert ApprovalServer().show("http://127.0.0.1:1/approve/x") is False

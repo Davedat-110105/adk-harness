@@ -144,13 +144,18 @@ async def _run(
             pending, url = state.approvals.offer_for(
                 operation=spec.method_id, arguments=arguments, change_hash=intent
             )
+            opened = state.approvals.show(url)
             held = written(
                 "held",
-                "nothing ran. Show the person the approval card, then call this "
-                "tool again with the same arguments once they have approved.",
+                "nothing ran. The approval page is open in the person's browser. "
+                "Call await_approval and keep calling it until they answer."
+                if opened
+                else "nothing ran. Give the person the approval link, then call "
+                "await_approval until they answer.",
             )
             return {
                 **held,
+                "approval_opened_in_browser": opened,
                 "approval_widget": state.approvals.widget(pending),
                 "approval_url": url,
             }

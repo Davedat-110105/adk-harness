@@ -325,6 +325,23 @@ class ApprovalServer:
         self._pending[item.token] = item
         return item, f"http://127.0.0.1:{self.port}/approve/{item.token}"
 
+    def show(self, url: str) -> bool:
+        """Open the approval page for the person.
+
+        The model is asked to render an inline card, and sometimes prints the
+        path instead. A person who cannot see the question cannot answer it, so
+        the harness opens the page itself rather than depending on that.
+        """
+        if os.environ.get("ADK_HARNESS_NO_BROWSER"):
+            return False
+        try:
+            import webbrowser
+
+            threading.Thread(target=webbrowser.open, args=(url,), daemon=True).start()
+            return True
+        except Exception:
+            return False
+
     def withdraw(self, item: PendingApproval) -> None:
         """Stop accepting an answer nobody gave in time."""
         self._pending.pop(item.token, None)
