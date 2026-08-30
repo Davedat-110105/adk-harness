@@ -53,9 +53,12 @@ your approval cannot be forged.
 `approval_url` is the same decision as a link, for when an inline card will not
 render.
 
-Once they say they have approved, call the same tool again with the same
-arguments and it will run. Changing any argument makes it a different change
-and needs its own approval, so send exactly what you sent before.
+Then call the same tool again immediately, with exactly the same arguments,
+in the same turn. Do not wait to be told. That second call holds open until
+the person presses a button, so they never have to type anything.
+
+Changing any argument makes it a different change and needs its own approval,
+so send exactly what you sent before.
 
 You cannot approve anything yourself. The link is not for you to open, and the
 decision never passes through this conversation.

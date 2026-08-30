@@ -508,3 +508,27 @@ async def test_a_read_has_no_body(connected: Any) -> None:
     listing = server._tool_manager.get_tool("calendar_events_list")
 
     assert "body" not in listing.parameters["properties"]
+
+
+async def test_calling_again_waits_for_the_card_instead_of_asking_twice(
+    connected: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Once the card is up, the next call holds open until a button is pressed."""
+    import asyncio
+    import threading
+
+    server, state, calls = connected
+    monkeypatch.setattr(mcp_stdio, "APPROVAL_TIMEOUT_SECONDS", 5.0)
+
+    first = await _call_tool(server, "calendar_events_insert", EVENT, None)
+    assert first["outcome"] == "held"
+
+    pending = next(iter(state.approvals._pending.values()))
+    threading.Timer(0.2, lambda: pending.resolve(True)).start()
+
+    second = await asyncio.wait_for(
+        _call_tool(server, "calendar_events_insert", EVENT, None), timeout=8
+    )
+
+    assert second["outcome"] == "allowed"
+    assert calls == [("calendar.events.insert", EVENT)]

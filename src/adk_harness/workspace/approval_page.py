@@ -10,6 +10,7 @@ and that path stops working the moment it is answered.
 
 from __future__ import annotations
 
+import json
 import secrets
 import tempfile
 import threading
@@ -29,32 +30,51 @@ _WIDGET = """<!DOCTYPE html>
 <html><head>
 <script src="https://www.gstatic.com/antigravity/web/dev/tailwindcss.min.js"></script>
 </head>
-<body class="bg-transparent text-[var(--foreground)] antialiased p-4">
-<div id="card" class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-4">
-  <h2 class="font-semibold">This change needs your approval</h2>
-  <p class="text-[var(--muted-foreground)] text-sm mt-1">{operation}</p>
-  <p class="text-[var(--muted-foreground)] text-xs mt-2 font-mono break-all">{arguments}</p>
-  <p class="text-[var(--muted-foreground)] text-xs mt-1 font-mono break-all">{change_hash}</p>
-  <div id="buttons" class="mt-4 flex gap-2">
-    <button onclick="answer('yes')"
-      class="px-3 py-1.5 rounded-md bg-[var(--primary)] text-[var(--primary-foreground)]">
-      Approve</button>
-    <button onclick="answer('no')"
-      class="px-3 py-1.5 rounded-md bg-[var(--secondary)] text-[var(--secondary-foreground)]">
-      Decline</button>
+<body class="bg-transparent text-[var(--foreground)] antialiased p-3">
+<div class="bg-[var(--card)] border border-[var(--border)] rounded-xl overflow-hidden">
+  <div class="px-4 pt-4 pb-3">
+    <div class="flex items-baseline justify-between gap-3">
+      <h2 class="font-semibold text-[15px]">Approve this change?</h2>
+      <span class="text-[11px] uppercase tracking-wide text-[var(--muted-foreground)]">
+        nothing has run</span>
+    </div>
+    <p class="text-[13px] mt-1 font-mono text-[var(--muted-foreground)]">{operation}</p>
   </div>
-  <p id="done" class="text-[var(--muted-foreground)] text-sm mt-3"></p>
+
+  <div class="px-4 pb-3">
+    <pre class="text-[11.5px] leading-relaxed font-mono bg-[var(--background)]
+      border border-[var(--border)] rounded-lg p-3 max-h-40 overflow-auto
+      whitespace-pre-wrap break-all">{arguments}</pre>
+  </div>
+
+  <div id="buttons" class="px-4 pb-4 flex items-center gap-2">
+    <button onclick="answer('yes')"
+      class="px-3.5 py-1.5 text-[13px] font-medium rounded-md
+      bg-[var(--primary)] text-[var(--primary-foreground)]">Approve</button>
+    <button onclick="answer('no')"
+      class="px-3.5 py-1.5 text-[13px] font-medium rounded-md
+      bg-[var(--secondary)] text-[var(--secondary-foreground)]">Decline</button>
+    <span class="ml-auto text-[10.5px] font-mono text-[var(--muted-foreground)]"
+      title="{change_hash}">{short_hash}</span>
+  </div>
+
+  <p id="done" class="hidden px-4 pb-4 text-[13px] text-[var(--muted-foreground)]"></p>
 </div>
 <script>
 function answer(choice) {{
-  document.getElementById('buttons').remove();
+  var buttons = document.getElementById('buttons');
+  var done = document.getElementById('done');
+  buttons.remove();
+  done.classList.remove('hidden');
+  done.textContent = 'Sending your answer...';
   fetch('{base}/' + choice, {{method: 'POST'}})
-    .then(() => {{
-      document.getElementById('done').textContent =
-        choice === 'yes' ? 'Approved. Tell the agent to continue.' : 'Declined. Nothing ran.';
+    .then(function () {{
+      done.textContent = choice === 'yes'
+        ? 'Approved. Running it now.'
+        : 'Declined. Nothing ran.';
     }})
-    .catch(e => {{
-      document.getElementById('done').textContent = 'Could not reach the harness: ' + e;
+    .catch(function (error) {{
+      done.textContent = 'Could not reach the harness: ' + error;
     }});
 }}
 </script>
@@ -200,8 +220,9 @@ class ApprovalServer:
         base = f"http://127.0.0.1:{self.port}/approve/{item.token}"
         html = _WIDGET.format(
             operation=escape(item.operation),
-            arguments=escape(str(item.arguments)),
+            arguments=escape(json.dumps(dict(item.arguments), indent=2, sort_keys=True)),
             change_hash=escape(item.change_hash),
+            short_hash=escape(item.change_hash[:12]),
             base=base,
         )
         path = Path(tempfile.gettempdir()) / f"adk-harness-approve-{item.token}.html"
@@ -234,6 +255,13 @@ class ApprovalServer:
             if item.change_hash == change_hash:
                 return item, f"http://127.0.0.1:{self.port}/approve/{item.token}"
         return self.offer(operation=operation, arguments=arguments, change_hash=change_hash)
+
+    def waiting_for(self, change_hash: str) -> PendingApproval | None:
+        """Return the approval already on screen for this change, if any."""
+        for item in self._pending.values():
+            if item.change_hash == change_hash:
+                return item
+        return None
 
     def answer_for(self, change_hash: str) -> bool | None:
         """Return a decision already given for this exact change, once.

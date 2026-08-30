@@ -122,6 +122,13 @@ async def _run(
         )
         approved = state.approvals.answer_for(intent)
         if approved is None:
+            waiting = state.approvals.waiting_for(intent)
+            if waiting is not None:
+                # The card is already on screen. Hold this call open rather than
+                # making the person type once they have pressed a button.
+                approved = await asyncio.to_thread(waiting.wait, APPROVAL_TIMEOUT_SECONDS)
+                state.approvals.answer_for(intent)
+        if approved is None:
             approved = await _ask_person(state, context, spec, arguments, intent)
         if approved is None:
             # The client will not carry the question, so hand over the link and
