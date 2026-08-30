@@ -75,6 +75,17 @@ def connected(monkeypatch: pytest.MonkeyPatch) -> Any:
     return server, state, calls
 
 
+async def _call_tool(server: Any, name: str, arguments: dict[str, Any], elicit: Any) -> Any:
+    """Call a tool whose arguments are its own, not wrapped in `arguments`."""
+    import json
+
+    async with create_connected_server_and_client_session(
+        server._mcp_server, elicitation_callback=elicit
+    ) as client:
+        result = await client.call_tool(name, arguments)
+    return json.loads(result.content[0].text)
+
+
 async def _call(server: Any, name: str, arguments: dict[str, Any], elicit: Any) -> Any:
     async with create_connected_server_and_client_session(
         server._mcp_server, elicitation_callback=elicit
@@ -167,3 +178,59 @@ def test_the_server_starts_without_an_oauth_client_configuration() -> None:
     assert state.grant is None
     assert state.specs == {}
     assert server is not None
+
+
+async def test_connecting_again_reuses_the_grant_instead_of_a_second_login(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A returning person should not be sent back to Google's consent screen."""
+    grant = _grant(CALENDAR_EVENTS)
+    monkeypatch.setattr(mcp_stdio, "resolve_grant", lambda authenticator: grant)
+    logins: list[Any] = []
+
+    class Authenticator:
+        def login(self, purpose: Any, *, scopes: Any) -> None:
+            logins.append(scopes)
+
+    server, _state = mcp_stdio.build_server(Authenticator)  # type: ignore[arg-type]
+
+    async def never(context: Any, params: Any) -> Any:
+        raise AssertionError("connecting must not need approval")
+
+    result = await _call_tool(server, "connect_workspace", {"services": ["calendar"]}, never)
+
+    assert logins == []
+    assert result["reused_existing_grant"] is True
+    assert "calendar_events_list" in result["tools"]
+
+
+async def test_a_service_outside_the_grant_still_asks_google(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    grant = _grant(CALENDAR_EVENTS)
+    monkeypatch.setattr(mcp_stdio, "resolve_grant", lambda authenticator: grant)
+    logins: list[Any] = []
+
+    class Authenticator:
+        def login(self, purpose: Any, *, scopes: Any) -> None:
+            logins.append(tuple(scopes))
+
+    server, _state = mcp_stdio.build_server(Authenticator)  # type: ignore[arg-type]
+
+    async def never(context: Any, params: Any) -> Any:
+        raise AssertionError("connecting must not need approval")
+
+    await _call_tool(server, "connect_workspace", {"services": ["sheets"]}, never)
+
+    assert len(logins) == 1
+
+
+def test_status_reports_why_no_tools_appeared() -> None:
+    def unconfigured() -> Any:
+        raise GoogleAuthError("Google OAuth client configuration is not configured")
+
+    _server, state = mcp_stdio.build_server(unconfigured)
+
+    assert state.specs == {}
+    assert state.startup_error is not None
+    assert "GoogleAuthError" in state.startup_error

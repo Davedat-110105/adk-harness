@@ -43,6 +43,7 @@ class ServerState:
         self._authenticator: GoogleAuthenticator | None = None
         self.grant: Grant | None = None
         self.specs: dict[str, ToolSpec] = {}
+        self.startup_error: str | None = None
 
     @property
     def authenticator(self) -> GoogleAuthenticator:
@@ -115,6 +116,20 @@ async def _run(
     }
 
 
+def _stored_grant(state: ServerState) -> Grant | None:
+    """Return the stored grant, recording why there is none."""
+    try:
+        grant = resolve_grant(state.authenticator)
+    except Exception as exc:
+        state.startup_error = f"{type(exc).__name__}: {exc}"
+        return None
+    if grant is None:
+        state.startup_error = "no stored Workspace grant"
+    else:
+        state.startup_error = None
+    return grant
+
+
 def build_server(
     make_authenticator: Callable[[], GoogleAuthenticator],
 ) -> tuple[Any, ServerState]:
@@ -155,6 +170,19 @@ def build_server(
                 description=f"[{decide(spec).outcome}] {spec.description}",
             )
 
+    async def adopt(grant: Grant | None, *, reused: bool) -> dict[str, Any]:
+        """Expose whatever the grant covers and tell the client the list moved."""
+        specs = state.adopt(grant)
+        register(specs)
+        await server.get_context().session.send_tool_list_changed()
+        return {
+            "connected": grant is not None,
+            "reused_existing_grant": reused,
+            "subject": grant.subject if grant else None,
+            "granted_scopes": list(grant.scopes) if grant else [],
+            "tools": [spec.name for spec in specs],
+        }
+
     async def connect_workspace(services: list[str] | None = None) -> dict[str, Any]:
         """Connect a Google Workspace account and expose what it granted."""
         selected = tuple(services or SERVICES)
@@ -164,6 +192,13 @@ def build_server(
         scopes = tuple(
             scope for service in selected for scope in APPLICATION_SCOPES[service]
         )
+
+        # A grant that already covers these services is the answer. Sending a
+        # person back to Google every time would teach them to click through it.
+        existing = _stored_grant(state)
+        if existing is not None and set(scopes) <= set(existing.scopes):
+            return await adopt(existing, reused=True)
+
         try:
             state.authenticator.login(CredentialPurpose.WORKSPACE, scopes=scopes)
         except GoogleAuthError:
@@ -177,22 +212,24 @@ def build_server(
         except Exception as exc:  # the SDK's message can carry callback URLs
             del exc
             return {"connected": False, "reason": "Google login did not complete"}
-        specs = state.adopt(resolve_grant(state.authenticator))
-        register(specs)
-        await server.get_context().session.send_tool_list_changed()
+        return await adopt(_stored_grant(state), reused=False)
+
+    server.add_tool(connect_workspace, name="connect_workspace")
+    # Reading the keyring at startup is a convenience, not the design. When it
+    # fails, connect_workspace still finds the grant and the tools still appear.
+    register(state.adopt(_stored_grant(state)))
+
+    def workspace_status() -> dict[str, Any]:
+        """Report whether a Workspace grant was found, and why not."""
         return {
             "connected": state.grant is not None,
             "subject": state.grant.subject if state.grant else None,
             "granted_scopes": list(state.grant.scopes) if state.grant else [],
-            "tools": [spec.name for spec in specs],
+            "tools": sorted(state.specs),
+            "startup_error": state.startup_error,
         }
 
-    server.add_tool(connect_workspace, name="connect_workspace")
-    try:
-        register(state.adopt(resolve_grant(state.authenticator)))
-    except Exception:
-        # No configuration and no stored grant simply means no tools yet.
-        state.adopt(None)
+    server.add_tool(workspace_status, name="workspace_status")
     return server, state
 
 
