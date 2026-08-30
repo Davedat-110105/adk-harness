@@ -683,3 +683,81 @@ def test_an_unrelated_event_type_is_still_ignored() -> None:
     result = receiver.handle({"type": "google.cloud.firestore.document.v1.deleted"})
 
     assert result.status == "ignored"
+
+
+def test_the_control_reader_carries_the_request_hash_and_id(monkeypatch) -> None:
+    """The receiver compares both, so a reader that drops them holds everything."""
+    from adk_harness.cloud import handler
+
+    stored = {
+        "request": {"task_id": "t-1"},
+        "request_hash": "h-1",
+        "request_id": "r-1",
+        "changeset": {"change_id": "c-1"},
+        "changeset_hash": "ch-1",
+        "changeset_canonical": "{}",
+        "provenance": {"firebase_uid": "u-1"},
+    }
+
+    class _Snapshot:
+        exists = True
+
+        def to_dict(self):
+            return stored
+
+    class _Reference:
+        def get(self):
+            return _Snapshot()
+
+        def collection(self, name):
+            return _Empty()
+
+    class _Empty:
+        def stream(self):
+            return []
+
+    class _Client:
+        def __init__(self, **kwargs):
+            pass
+
+        def document(self, path):
+            return _Reference()
+
+    monkeypatch.setenv("ADK_PROJECT_ID", "demo")
+    monkeypatch.setenv("ADK_RUNTIME_DATABASE", "runtime")
+    monkeypatch.setenv("ADK_FIREBASE_PROJECT_ID", "demo")
+    monkeypatch.setattr("google.cloud.firestore.Client", _Client)
+
+    receiver = handler._runtime_receiver()
+    trusted = receiver.control_reader("//x/documents/projects/demo/requests/r-1")
+
+    assert trusted["request_hash"] == "h-1"
+    assert trusted["request_id"] == "r-1"
+    assert trusted["request"] == {"task_id": "t-1"}
+
+
+def test_provenance_can_come_from_the_eventarc_auth_context() -> None:
+    """Nobody should have to stand up Firebase to run one governed task."""
+    from adk_harness.cloud.handler import GooglePrincipalProvenanceAdapter
+
+    adapter = GooglePrincipalProvenanceAdapter()
+
+    provenance = adapter(
+        {"extensions": {"authtype": "user", "authid": "112029692704988327139"}}
+    )
+
+    assert provenance == {
+        "firebase_uid": "112029692704988327139",
+        "google_subject": "112029692704988327139",
+        "authtype": "user",
+    }
+
+
+def test_an_unauthenticated_write_has_no_provenance() -> None:
+    from adk_harness.cloud.handler import GooglePrincipalProvenanceAdapter
+
+    adapter = GooglePrincipalProvenanceAdapter()
+
+    assert adapter({"extensions": {"authtype": "unauthenticated", "authid": "x"}}) is None
+    assert adapter({"extensions": {"authtype": "user", "authid": ""}}) is None
+    assert adapter({}) is None

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 from typing import Any, cast
 
@@ -109,6 +109,31 @@ CREATED_EVENT_TYPES = frozenset(
         "google.cloud.firestore.document.v1.created.withAuthContext",
     }
 )
+
+
+class GooglePrincipalProvenanceAdapter:
+    """Take provenance from the identity Eventarc says wrote the document.
+
+    A withAuthContext trigger carries who performed the write. That is proof
+    enough of who asked, so an organisation does not have to stand up Firebase
+    and Identity Platform to run one task. The write still has to come from the
+    person the request names, checked against the document path downstream.
+    """
+
+    def __init__(self, *, allowed_authtypes: Iterable[str] = ("service_account", "user")) -> None:
+        self.allowed_authtypes = frozenset(allowed_authtypes)
+
+    def __call__(self, event: Mapping[str, Any]) -> Mapping[str, Any] | None:
+        extensions = event.get("extensions")
+        if not isinstance(extensions, Mapping):
+            return None
+        authtype = str(extensions.get("authtype", ""))
+        authid = str(extensions.get("authid", ""))
+        if authtype not in self.allowed_authtypes or not authid:
+            return None
+        # The receiver binds both to the path and to the request, so returning
+        # the same principal twice keeps those checks meaningful.
+        return {"firebase_uid": authid, "google_subject": authid, "authtype": authtype}
 
 
 class EventarcReceiver:
@@ -571,8 +596,13 @@ def _runtime_receiver() -> EventarcReceiver:
         approvals = []
         for child in ref.collection("approvals").stream():
             approvals.append(child.to_dict() or {})
+        # The document wraps the immutable request; the receiver compares the
+        # request's own hash and id, so both have to travel with it.
+        request = parent.get("request")
         return {
-            "request": parent,
+            "request": request if isinstance(request, Mapping) else parent,
+            "request_hash": parent.get("request_hash"),
+            "request_id": parent.get("request_id"),
             "approvals": approvals,
             "changeset": parent.get("changeset"),
             "changeset_hash": parent.get("changeset_hash"),
@@ -582,8 +612,10 @@ def _runtime_receiver() -> EventarcReceiver:
 
     def verify_provenance(event: Mapping[str, Any]) -> Mapping[str, Any] | None:
         firebase_project_id = os.environ.get("ADK_FIREBASE_PROJECT_ID")
-        if not firebase_project_id:
-            return None
+        if not firebase_project_id or os.environ.get("ADK_PROVENANCE") == "principal":
+            # Without Firebase the auth context is the proof, which is what a
+            # withAuthContext trigger exists to deliver.
+            return GooglePrincipalProvenanceAdapter()(event)
         return EventarcProvenanceAdapter(
             firebase_project_id=firebase_project_id,
             expected_delivery_authid=os.environ.get("ADK_EVENTARC_AUTH_ID"),
@@ -604,6 +636,7 @@ __all__ = [
     "CloudRunDispatcher",
     "EventarcProvenanceAdapter",
     "EventarcReceiver",
+    "GooglePrincipalProvenanceAdapter",
     "ReceiverConfig",
     "ReceiverResult",
     "firestore_event",
