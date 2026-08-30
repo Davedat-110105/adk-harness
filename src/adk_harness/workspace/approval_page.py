@@ -10,7 +10,9 @@ and that path stops working the moment it is answered.
 
 from __future__ import annotations
 
+import contextlib
 import json
+import os
 import secrets
 import tempfile
 import threading
@@ -22,7 +24,13 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
-__all__ = ["ApprovalServer", "PendingApproval"]
+# How long the Stop hook holds a turn open while somebody decides.
+HOOK_WAIT_SECONDS = float(os.environ.get("ADK_HARNESS_HOOK_WAIT", "120"))
+
+__all__ = ["ENDPOINT_FILE", "ApprovalServer", "PendingApproval"]
+
+# Where the Stop hook looks for the running harness.
+ENDPOINT_FILE = Path(tempfile.gettempdir()) / "adk-harness-approval-endpoint.json"
 
 # Rendered inline in the client's own chat. Tailwind is the one allowlisted
 # stylesheet there, and the theme variables come from the host.
@@ -222,6 +230,24 @@ class ApprovalServer:
                     self.wfile.write(body)
 
                 def do_GET(self) -> None:
+                    path = urlparse(self.path).path.strip("/")
+                    if path == "waiting":
+                        # The Stop hook asks whether anybody is mid-decision, and
+                        # waits for the answer rather than ending the turn.
+                        item = next(iter(list(pending.values())), None)
+                        if item is None:
+                            self._json({"waiting": False})
+                            return
+                        decided = item.wait(HOOK_WAIT_SECONDS)
+                        self._json(
+                            {
+                                "waiting": True,
+                                "answered": decided is not None,
+                                "approved": bool(decided),
+                                "operation": item.operation,
+                            }
+                        )
+                        return
                     item, action = self._find()
                     if action == "status":
                         token = urlparse(self.path).path.strip("/").split("/")[1]
@@ -265,6 +291,11 @@ class ApprovalServer:
             self._httpd = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
             thread = threading.Thread(target=self._httpd.serve_forever, daemon=True)
             thread.start()
+            with contextlib.suppress(OSError):
+                ENDPOINT_FILE.write_text(
+                    json.dumps({"base": f"http://127.0.0.1:{self._httpd.server_address[1]}"}),
+                    encoding="utf-8",
+                )
 
     def widget(self, item: PendingApproval) -> str:
         """Write the inline card for one pending change and return its path."""

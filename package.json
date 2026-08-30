@@ -12,6 +12,8 @@
     "plugins/antigravity/README.md",
     "plugins/antigravity/rules/governance.md",
     "plugins/antigravity/skills/governed-workspace/SKILL.md",
+    "plugins/antigravity/hooks/hooks.json",
+    "plugins/antigravity/hooks/await_approval.py",
     "infra/gcp/main.tf",
     "infra/gcp/variables.tf",
     "infra/gcp/outputs.tf",

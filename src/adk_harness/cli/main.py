@@ -329,7 +329,43 @@ def _install_plugin(args: argparse.Namespace) -> int:
     for path in sorted(destination.rglob("*")):
         if path.is_file():
             print(f"  {path.relative_to(destination)}")
-    return _register_mcp_server(args)
+    outcome = _register_hooks(args, destination)
+    return outcome or _register_mcp_server(args)
+
+
+def _register_hooks(args: argparse.Namespace, destination: Path) -> int:
+    """Install the Stop hook that waits while somebody answers a card."""
+    source = destination / "hooks" / "hooks.json"
+    script = destination / "hooks" / "await_approval.py"
+    if not source.is_file() or not script.is_file():
+        return 0
+    script.chmod(0o755)
+    default = Path.home() / ".gemini" / "config" / "hooks.json"
+    path = Path(args.hooks_config).expanduser() if args.hooks_config else default
+    try:
+        config = json.loads(path.read_text(encoding="utf-8")) if path.is_file() else {}
+    except (OSError, json.JSONDecodeError) as exc:
+        print(f"the hooks configuration could not be read: {exc}", file=sys.stderr)
+        return 2
+    if not isinstance(config, dict):
+        print("the hooks configuration is not a JSON object", file=sys.stderr)
+        return 2
+    ours = json.loads(source.read_text(encoding="utf-8").replace("PLUGIN_DIR", str(destination)))
+    for event, entries in ours.items():
+        existing = [
+            entry
+            for entry in config.get(event, [])
+            if "await_approval.py" not in json.dumps(entry)
+        ]
+        config[event] = existing + entries
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
+    except OSError as exc:
+        print(f"the hooks configuration could not be written: {exc}", file=sys.stderr)
+        return 2
+    print(f"hooked: {path}")
+    return 0
 
 
 def _register_mcp_server(args: argparse.Namespace) -> int:
@@ -416,6 +452,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--plugin-dir", help="destination for install-plugin")
     parser.add_argument("--mcp-config", help="Antigravity mcp_config.json to register in")
     parser.add_argument("--gcp-project", help="Google Cloud project holding the audit ledger")
+    parser.add_argument("--hooks-config", help="Antigravity hooks.json to register in")
     args = parser.parse_args(argv)
     if args.command == "doctor":
         return asyncio.run(_doctor())

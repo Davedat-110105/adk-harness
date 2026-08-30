@@ -157,3 +157,51 @@ def test_install_plugin_records_the_audit_project(tmp_path) -> None:
 
     entry = json.loads(config.read_text(encoding="utf-8"))["mcpServers"]["adk-harness"]
     assert entry["env"]["GOOGLE_CLOUD_PROJECT"] == "model-creek-506520-u4"
+
+
+def test_install_plugin_registers_the_stop_hook(tmp_path) -> None:
+    """The hook holds the turn open while somebody answers the card."""
+    hooks = tmp_path / "hooks.json"
+
+    assert (
+        main(
+            [
+                "install-plugin",
+                "--plugin-dir",
+                str(tmp_path / "plugin"),
+                "--mcp-config",
+                str(tmp_path / "mcp_config.json"),
+                "--hooks-config",
+                str(hooks),
+            ]
+        )
+        == 0
+    )
+
+    config = json.loads(hooks.read_text(encoding="utf-8"))
+    command = config["Stop"][0]["hooks"][0]["command"]
+    assert command.endswith("hooks/await_approval.py")
+    assert "PLUGIN_DIR" not in command
+
+
+def test_installing_twice_leaves_one_hook(tmp_path) -> None:
+    hooks = tmp_path / "hooks.json"
+    hooks.write_text(json.dumps({"Stop": [{"hooks": [{"command": "/other/thing"}]}]}))
+    arguments = [
+        "install-plugin",
+        "--plugin-dir",
+        str(tmp_path / "plugin"),
+        "--mcp-config",
+        str(tmp_path / "mcp_config.json"),
+        "--hooks-config",
+        str(hooks),
+    ]
+
+    assert main(arguments) == 0
+    assert main(arguments) == 0
+
+    config = json.loads(hooks.read_text(encoding="utf-8"))
+    ours = [e for e in config["Stop"] if "await_approval" in json.dumps(e)]
+    theirs = [e for e in config["Stop"] if "/other/thing" in json.dumps(e)]
+    assert len(ours) == 1
+    assert len(theirs) == 1
