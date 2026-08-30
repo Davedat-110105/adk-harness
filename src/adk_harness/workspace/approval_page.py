@@ -31,55 +31,61 @@ _WIDGET = """<!DOCTYPE html>
 <script src="https://www.gstatic.com/antigravity/web/dev/tailwindcss.min.js"></script>
 </head>
 <body class="bg-transparent text-[var(--foreground)] antialiased p-3">
-<div class="bg-[var(--card)] border border-[var(--border)] rounded-xl overflow-hidden">
-  <div class="px-4 pt-4 pb-3">
-    <div class="flex items-baseline justify-between gap-3">
-      <h2 class="font-semibold text-[15px]">Approve this change?</h2>
-      <span class="text-[11px] uppercase tracking-wide text-[var(--muted-foreground)]">
-        nothing has run</span>
+<div class="bg-[var(--card)] border border-[var(--border)] rounded-lg px-4 py-3.5">
+  <div class="flex items-baseline justify-between gap-3">
+    <h2 class="text-[14px] font-semibold">Approve this change?</h2>
+    <span id="state" class="text-[12px] text-[var(--muted-foreground)]">nothing has run</span>
+  </div>
+
+  <p class="text-[12px] font-mono text-[var(--muted-foreground)] mt-0.5">{operation}</p>
+
+  <dl class="mt-2.5 text-[12px] grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
+    {rows}
+  </dl>
+
+  <div class="mt-3.5 flex items-center gap-2">
+    <div id="buttons" class="flex gap-2">
+      <button onclick="answer('yes')"
+        class="text-[12px] font-medium px-3 py-1.5 rounded-md
+        bg-[var(--primary)] text-[var(--primary-foreground)]">Approve</button>
+      <button onclick="answer('no')"
+        class="text-[12px] font-medium px-3 py-1.5 rounded-md
+        bg-[var(--secondary)] text-[var(--secondary-foreground)]">Decline</button>
     </div>
-    <p class="text-[13px] mt-1 font-mono text-[var(--muted-foreground)]">{operation}</p>
-  </div>
-
-  <div class="px-4 pb-3">
-    <pre class="text-[11.5px] leading-relaxed font-mono bg-[var(--background)]
-      border border-[var(--border)] rounded-lg p-3 max-h-40 overflow-auto
-      whitespace-pre-wrap break-all">{arguments}</pre>
-  </div>
-
-  <div id="buttons" class="px-4 pb-4 flex items-center gap-2">
-    <button onclick="answer('yes')"
-      class="px-3.5 py-1.5 text-[13px] font-medium rounded-md
-      bg-[var(--primary)] text-[var(--primary-foreground)]">Approve</button>
-    <button onclick="answer('no')"
-      class="px-3.5 py-1.5 text-[13px] font-medium rounded-md
-      bg-[var(--secondary)] text-[var(--secondary-foreground)]">Decline</button>
-    <span class="ml-auto text-[10.5px] font-mono text-[var(--muted-foreground)]"
+    <span class="ml-auto text-[12px] font-mono text-[var(--muted-foreground)]"
       title="{change_hash}">{short_hash}</span>
   </div>
-
-  <p id="done" class="hidden px-4 pb-4 text-[13px] text-[var(--muted-foreground)]"></p>
 </div>
 <script>
-function answer(choice) {{
+var base = '{base}';
+
+function settle(approved) {{
   var buttons = document.getElementById('buttons');
-  var done = document.getElementById('done');
-  buttons.remove();
-  done.classList.remove('hidden');
-  done.textContent = 'Sending your answer...';
-  fetch('{base}/' + choice, {{method: 'POST'}})
-    .then(function () {{
-      done.textContent = choice === 'yes'
-        ? 'Approved. Running it now.'
-        : 'Declined. Nothing ran.';
-    }})
+  if (buttons) {{ buttons.remove(); }}
+  document.getElementById('state').textContent = approved ? 'approved' : 'declined, nothing ran';
+}}
+
+function answer(choice) {{
+  document.getElementById('state').textContent = 'sending...';
+  fetch(base + '/' + choice, {{method: 'POST'}})
+    .then(function () {{ settle(choice === 'yes'); }})
     .catch(function (error) {{
-      done.textContent = 'Could not reach the harness: ' + error;
+      document.getElementById('state').textContent = 'could not reach the harness';
     }});
 }}
+
+// The frame reloads whenever the conversation updates, so read the decision
+// back rather than trusting anything this page remembers.
+fetch(base + '/status')
+  .then(function (r) {{ return r.json(); }})
+  .then(function (d) {{ if (d.answered) {{ settle(d.approved); }} }})
+  .catch(function () {{}});
 </script>
 </body></html>
 """
+
+_ROW = ('<dt class="text-[var(--muted-foreground)]">{key}</dt>'
+        '<dd class="font-mono break-all">{value}</dd>')
 
 _PAGE = """<!doctype html>
 <html><head><meta charset="utf-8"><title>Approve this change</title>
@@ -112,6 +118,31 @@ _CHOICES = """<form method="post" action="{path}/yes"><button class="yes">Approv
 <form method="post" action="{path}/no"><button class="no">Decline</button></form>"""
 
 
+def _rows(arguments: Mapping[str, Any], limit: int = 5) -> list[str]:
+    """Flatten the payload into a few readable lines.
+
+    An inline card must not scroll inside itself, so long payloads are
+    summarised and the full text stays on the approval page.
+    """
+    flat: list[tuple[str, str]] = []
+
+    def walk(value: Any, prefix: str) -> None:
+        if isinstance(value, Mapping):
+            for key, item in value.items():
+                walk(item, f"{prefix}.{key}" if prefix else str(key))
+        else:
+            flat.append((prefix, str(value)))
+
+    walk(dict(arguments), "")
+    rows = [
+        _ROW.format(key=escape(key), value=escape(value[:80]))
+        for key, value in flat[:limit]
+    ]
+    if len(flat) > limit:
+        rows.append(_ROW.format(key="", value=f"and {len(flat) - limit} more"))
+    return rows
+
+
 @dataclass
 class PendingApproval:
     """One change waiting for a person."""
@@ -140,6 +171,7 @@ class ApprovalServer:
     def __init__(self) -> None:
         self._pending: dict[str, PendingApproval] = {}
         self._granted: dict[str, PendingApproval] = {}
+        self._answered: dict[str, bool] = {}
         self._httpd: ThreadingHTTPServer | None = None
         self._lock = threading.Lock()
 
@@ -155,6 +187,7 @@ class ApprovalServer:
                 return
             pending = self._pending
             granted = self._granted
+            answered = self._answered
 
             class Handler(BaseHTTPRequestHandler):
                 def log_message(self, format: str, *args: object) -> None:
@@ -166,6 +199,16 @@ class ApprovalServer:
                         return None, ""
                     token = parts[1] if len(parts) > 1 else ""
                     return pending.get(token), parts[2] if len(parts) > 2 else ""
+
+                def _json(self, payload: dict[str, Any]) -> None:
+                    body = json.dumps(payload).encode("utf-8")
+                    self.send_response(200)
+                    self.send_header("Access-Control-Allow-Origin", "*")
+                    self.send_header("Content-Type", "application/json")
+                    self.send_header("Content-Length", str(len(body)))
+                    self.send_header("Cache-Control", "no-store")
+                    self.end_headers()
+                    self.wfile.write(body)
 
                 def _send(self, html: str, status: int = 200) -> None:
                     body = html.encode("utf-8")
@@ -179,7 +222,14 @@ class ApprovalServer:
                     self.wfile.write(body)
 
                 def do_GET(self) -> None:
-                    item, _ = self._find()
+                    item, action = self._find()
+                    if action == "status":
+                        token = urlparse(self.path).path.strip("/").split("/")[1]
+                        decided = answered.get(token)
+                        self._json(
+                            {"answered": decided is not None, "approved": bool(decided)}
+                        )
+                        return
                     if item is None:
                         self._send("<p>This request is no longer waiting.</p>", 404)
                         return
@@ -201,6 +251,7 @@ class ApprovalServer:
                     item.resolve(answer == "yes")
                     pending.pop(item.token, None)
                     granted[item.change_hash] = item
+                    answered[item.token] = item.approved
                     self._send(
                         _PAGE.format(
                             heading="Approved" if item.approved else "Declined",
@@ -220,7 +271,7 @@ class ApprovalServer:
         base = f"http://127.0.0.1:{self.port}/approve/{item.token}"
         html = _WIDGET.format(
             operation=escape(item.operation),
-            arguments=escape(json.dumps(dict(item.arguments), indent=2, sort_keys=True)),
+            rows="".join(_rows(item.arguments)),
             change_hash=escape(item.change_hash),
             short_hash=escape(item.change_hash[:12]),
             base=base,

@@ -102,7 +102,7 @@ def test_the_inline_card_posts_back_to_this_server() -> None:
 
     assert "calendar.events.insert" in html
     assert "feedface" in html
-    assert f"{url}/' + choice" in html
+    assert f"var base = '{url}'" in html
     assert "Approve" in html and "Decline" in html
     assert "gstatic.com/antigravity" in html
 
@@ -122,3 +122,38 @@ def test_the_card_escapes_what_it_shows() -> None:
 
     assert "<script>alert(1)</script>" not in html
     assert "&lt;script&gt;" in html
+
+
+def test_a_reloaded_card_shows_the_answer_already_given() -> None:
+    """The frame reloads with the conversation, so it must read state back."""
+    server = ApprovalServer()
+    pending, url = server.offer(
+        operation="calendar.events.insert", arguments={"calendarId": "primary"}, change_hash="r"
+    )
+
+    import json as _json
+
+    before = _json.loads(_get(f"{url}/status")[1])
+    assert before == {"answered": False, "approved": False}
+
+    _post(f"{url}/yes")
+    after = _json.loads(_get(f"{url}/status")[1])
+
+    assert after == {"answered": True, "approved": True}
+    assert pending.approved is True
+
+
+def test_a_long_payload_is_summarised_rather_than_scrolled() -> None:
+    from pathlib import Path
+
+    server = ApprovalServer()
+    pending, _url = server.offer(
+        operation="calendar.events.insert",
+        arguments={"body": {f"field{n}": n for n in range(12)}},
+        change_hash="long",
+    )
+
+    html = Path(server.widget(pending)).read_text(encoding="utf-8")
+
+    assert "more" in html
+    assert "overflow-auto" not in html
