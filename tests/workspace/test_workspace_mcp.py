@@ -90,7 +90,7 @@ async def _call(server: Any, name: str, arguments: dict[str, Any], elicit: Any) 
     async with create_connected_server_and_client_session(
         server._mcp_server, elicitation_callback=elicit
     ) as client:
-        return await client.call_tool(name, {"arguments": arguments})
+        return await client.call_tool(name, arguments)
 
 
 async def test_a_read_runs_without_asking(connected: Any) -> None:
@@ -234,3 +234,20 @@ def test_status_reports_why_no_tools_appeared() -> None:
     assert state.specs == {}
     assert state.startup_error is not None
     assert "GoogleAuthError" in state.startup_error
+
+
+async def test_a_tool_advertises_the_operation_s_real_parameters(connected: Any) -> None:
+    """Without this the model guesses field names and burns a turn on the error."""
+    server, _state, _calls = connected
+    tool = server._tool_manager.get_tool("calendar_events_list")
+
+    assert tool.parameters["required"] == ["calendarId"]
+    assert "maxResults" in tool.parameters["properties"]
+    assert tool.parameters["properties"]["calendarId"]["description"]
+
+
+def test_push_notification_plumbing_is_not_offered(connected: Any) -> None:
+    server, _state, _calls = connected
+
+    assert "calendar_events_watch" not in server._tool_manager._tools
+    assert "calendar_channels_stop" not in server._tool_manager._tools

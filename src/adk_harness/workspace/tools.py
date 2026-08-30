@@ -45,6 +45,17 @@ SERVICES: Mapping[str, tuple[str, str]] = {
 
 READ_METHODS = frozenset({"GET"})
 
+# Push-notification plumbing. A person never asks for it and a model that calls
+# it gets a channel it cannot receive.
+SERVER_ONLY_METHODS = ("watch", "stop")
+
+PARAMETER_TYPES: Mapping[str, type] = {
+    "string": str,
+    "integer": int,
+    "number": float,
+    "boolean": bool,
+}
+
 # Sharing and sending are refused whatever the token allows, because neither
 # can be taken back once it has happened.
 REFUSED_RESOURCES = ("acl", "permissions")
@@ -157,6 +168,8 @@ def build_tools(grant: Grant, *, services: Sequence[str] | None = None) -> tuple
             # A service the installed client does not ship is simply absent.
             continue
         for method in _methods(document):
+            if method["id"].rsplit(".", 1)[-1] in SERVER_ONLY_METHODS:
+                continue
             required = tuple(method.get("scopes", ()))
             if not required or not grant.covers(required):
                 continue

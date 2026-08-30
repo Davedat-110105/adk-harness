@@ -7,6 +7,7 @@ this process without passing through the model.
 
 from __future__ import annotations
 
+import inspect
 from collections.abc import Callable, Mapping
 from typing import Any
 
@@ -16,6 +17,7 @@ from adk_harness.auth.credentials import CredentialPurpose
 from adk_harness.auth.google import GoogleAuthenticator, GoogleAuthError
 from adk_harness.workspace.app import APPLICATION_SCOPES
 from adk_harness.workspace.tools import (
+    PARAMETER_TYPES,
     SERVICES,
     Grant,
     ToolSpec,
@@ -116,6 +118,40 @@ async def _run(
     }
 
 
+def _annotations(spec: ToolSpec) -> dict[str, Any]:
+    """Map each Google parameter onto a typed, described annotation."""
+    from typing import Annotated
+
+    annotations: dict[str, Any] = {}
+    for parameter, schema in spec.parameters.items():
+        python_type = PARAMETER_TYPES.get(str(schema.get("type", "string")), str)
+        description = str(schema.get("description", "")).strip()
+        annotations[parameter] = (
+            Annotated[python_type, Field(description=description)]
+            if description
+            else python_type
+        )
+    return annotations
+
+
+def _signature(spec: ToolSpec) -> inspect.Signature:
+    """Required parameters stay required; the rest default to nothing."""
+    annotations = _annotations(spec)
+    required = [name for name in annotations if name in spec.required]
+    optional = [name for name in annotations if name not in spec.required]
+    return inspect.Signature(
+        [
+            inspect.Parameter(
+                name,
+                inspect.Parameter.KEYWORD_ONLY,
+                default=inspect.Parameter.empty if name in spec.required else None,
+                annotation=annotations[name],
+            )
+            for name in required + optional
+        ]
+    )
+
+
 def _stored_grant(state: ServerState) -> Grant | None:
     """Return the stored grant, recording why there is none."""
     try:
@@ -156,16 +192,27 @@ def build_server(
 
     low_level.create_initialization_options = initialization_options
 
-    def make_handler(name: str) -> Any:
-        async def handler(arguments: dict[str, Any] | None = None) -> Any:
-            return await _run(state, name, arguments or {}, server.get_context())
+    def make_handler(spec: ToolSpec) -> Any:
+        """Build a handler whose signature is the operation's real parameters.
 
+        Without this the tool advertises an untyped bag and the model guesses
+        the field names. Google's discovery document already knows them.
+        """
+        name = spec.name
+
+        async def handler(**arguments: Any) -> Any:
+            # Unset optional parameters arrive as None; Google wants them absent.
+            supplied = {key: value for key, value in arguments.items() if value is not None}
+            return await _run(state, name, supplied, server.get_context())
+
+        handler.__signature__ = _signature(spec)  # type: ignore[attr-defined]
+        handler.__annotations__ = dict(_annotations(spec))
         return handler
 
     def register(specs: tuple[ToolSpec, ...]) -> None:
         for spec in specs:
             server.add_tool(
-                make_handler(spec.name),
+                make_handler(spec),
                 name=spec.name,
                 description=f"[{decide(spec).outcome}] {spec.description}",
             )
