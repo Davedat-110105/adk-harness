@@ -53,3 +53,4 @@ ui/approval/coverage/
 firestore-debug.log
 firestore-*.log
 firestore-*.err
+infra/gcp/terraform.tfvars

@@ -99,7 +99,12 @@ resource "google_cloud_run_v2_service" "receiver" {
     containers {
       image   = var.receiver_container_image
       command = ["functions-framework"]
-      args    = ["--target=receiver_entrypoint", "--source=adk_harness.cloud.entrypoints", "--signature-type=cloudevent"]
+      # functions-framework resolves --source as a file path, not a module name.
+      args = [
+        "--target=receiver_entrypoint",
+        "--source=/usr/local/lib/python3.12/site-packages/adk_harness/cloud/entrypoints.py",
+        "--signature-type=cloudevent",
+      ]
       env {
         name  = "ADK_PROJECT_ID"
         value = var.project_id
