@@ -178,6 +178,20 @@ async def _choose_project(state: ServerState, context: Any) -> str | None:
     return answer.data.project_id
 
 
+def _client_capabilities(server: Any) -> dict[str, Any]:
+    """Report what this client says it supports, notably elicitation."""
+    try:
+        capabilities = server.get_context().session.client_params.capabilities
+    except Exception as exc:
+        return {"known": False, "reason": f"{type(exc).__name__}: {exc}"}
+    return {
+        "known": True,
+        "elicitation": capabilities.elicitation is not None,
+        "sampling": capabilities.sampling is not None,
+        "roots": capabilities.roots is not None,
+    }
+
+
 async def _connect_ledger(
     state: ServerState, context: Any, project_id: str | None
 ) -> dict[str, Any]:
@@ -373,11 +387,18 @@ def build_server(
             "granted_scopes": list(state.grant.scopes) if state.grant else [],
             "tools": sorted(state.specs),
             "startup_error": state.startup_error,
+            "client": _client_capabilities(server),
         }
 
-    async def connect_ledger(project_id: str | None = None) -> dict[str, Any]:
-        """Send this machine's decisions to a shared Firestore audit trail."""
-        return await _connect_ledger(state, server.get_context(), project_id)
+    async def connect_ledger() -> dict[str, Any]:
+        """Send this machine's decisions to a shared Firestore audit trail.
+
+        Do not guess the project. The person picks it, or an administrator set
+        GOOGLE_CLOUD_PROJECT and nobody is asked.
+        """
+        return await _connect_ledger(
+            state, server.get_context(), os.environ.get("GOOGLE_CLOUD_PROJECT")
+        )
 
     def governance_audit() -> dict[str, Any]:
         """Every decision this session, oldest first, with its change hash."""

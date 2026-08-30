@@ -408,3 +408,16 @@ async def test_declining_the_project_question_changes_nothing(
 
     assert result["connected"] is False
     assert state.evidence.ledger is None
+
+
+async def test_status_reports_whether_the_client_can_be_asked(connected: Any) -> None:
+    """When no prompt appears, this says whether one was ever possible."""
+    server, _state, _calls = connected
+
+    async def never(context: Any, params: Any) -> Any:
+        raise AssertionError("status must not ask")
+
+    status = await _call_tool(server, "workspace_status", {}, never)
+
+    assert status["client"]["known"] is True
+    assert status["client"]["elicitation"] is True
