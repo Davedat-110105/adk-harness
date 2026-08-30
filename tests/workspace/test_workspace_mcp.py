@@ -513,12 +513,12 @@ async def test_a_read_has_no_body(connected: Any) -> None:
 async def test_calling_again_waits_for_the_card_instead_of_asking_twice(
     connected: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Once the card is up, the next call holds open until a button is pressed."""
+    """A retry picks up an answer given moments earlier, without hanging."""
     import asyncio
     import threading
 
     server, state, calls = connected
-    monkeypatch.setattr(mcp_stdio, "APPROVAL_TIMEOUT_SECONDS", 5.0)
+    monkeypatch.setattr(mcp_stdio, "RETRY_WAIT_SECONDS", 5.0)
 
     first = await _call_tool(server, "calendar_events_insert", EVENT, None)
     assert first["outcome"] == "held"

@@ -37,6 +37,10 @@ __all__ = ["ApprovalAnswer", "ServerState", "build_server", "serve"]
 # Long enough to read a change, short enough that a forgotten tab expires.
 APPROVAL_TIMEOUT_SECONDS = float(os.environ.get("ADK_HARNESS_APPROVAL_TIMEOUT", "180"))
 
+# A retry checks whether the card was answered. It must not hold the
+# conversation open waiting for a card the model may never have shown.
+RETRY_WAIT_SECONDS = float(os.environ.get("ADK_HARNESS_RETRY_WAIT", "2"))
+
 
 class LedgerTarget(BaseModel):
     """Which Google Cloud project holds the shared decision trail."""
@@ -124,10 +128,11 @@ async def _run(
         if approved is None:
             waiting = state.approvals.waiting_for(intent)
             if waiting is not None:
-                # The card is already on screen. Hold this call open rather than
-                # making the person type once they have pressed a button.
-                approved = await asyncio.to_thread(waiting.wait, APPROVAL_TIMEOUT_SECONDS)
-                state.approvals.answer_for(intent)
+                # The card may already be on screen, so give it a short moment
+                # rather than holding the conversation open on a maybe.
+                approved = await asyncio.to_thread(waiting.wait, RETRY_WAIT_SECONDS)
+                if approved is not None:
+                    state.approvals.answer_for(intent)
         if approved is None:
             approved = await _ask_person(state, context, spec, arguments, intent)
         if approved is None:
