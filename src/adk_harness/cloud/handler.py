@@ -100,6 +100,17 @@ class EventarcProvenanceAdapter:
         return {"firebase_uid": firebase_uid, "google_subject": google_subject}
 
 
+# Eventarc delivers the withAuthContext variant when a trigger asks for the
+# originating user, which this receiver requires to verify provenance. The
+# plain type stays accepted for callers that supply provenance another way.
+CREATED_EVENT_TYPES = frozenset(
+    {
+        "google.cloud.firestore.document.v1.created",
+        "google.cloud.firestore.document.v1.created.withAuthContext",
+    }
+)
+
+
 class EventarcReceiver:
     """Small receiver that validates event identity before durable claiming."""
 
@@ -120,7 +131,7 @@ class EventarcReceiver:
 
     def handle(self, event: Any) -> ReceiverResult:
         event = _event_mapping(event)
-        if event.get("type") != "google.cloud.firestore.document.v1.created":
+        if event.get("type") not in CREATED_EVENT_TYPES:
             return ReceiverResult(
                 "ignored", reason="only immutable task-request creation is handled"
             )

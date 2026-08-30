@@ -635,3 +635,51 @@ def test_runtime_assembly_binds_state_and_publisher_to_runtime_client():
     )
     assert worker.state.client is runtime
     assert worker.publisher.client is runtime
+
+
+def test_the_receiver_accepts_the_event_type_the_trigger_sends() -> None:
+    """The trigger asks for auth context, so the type carries that suffix."""
+    from adk_harness.cloud.handler import CREATED_EVENT_TYPES
+
+    assert "google.cloud.firestore.document.v1.created.withAuthContext" in CREATED_EVENT_TYPES
+
+    receiver = EventarcReceiver(
+        config=ReceiverConfig(
+            project_id="project-a",
+            database="control",
+            path_prefix="projects/project-a/databases/control/documents/",
+        ),
+        store=InMemoryExecutionStore(),
+        dispatch=lambda _: pytest.fail("an unverified event must not dispatch"),
+        provenance_verifier=lambda _: None,
+        control_reader=lambda _: {},
+    )
+
+    result = receiver.handle(
+        {
+            "type": "google.cloud.firestore.document.v1.created.withAuthContext",
+            "source": "//firestore.googleapis.com/projects/project-a/databases/control",
+            "subject": (
+                "documents/projects/project-a/databases/control/documents/"
+                "projects/project-a/workspaces/w/members/u/requests/r"
+            ),
+        }
+    )
+
+    # It gets past the type check and is judged on its merits, rather than
+    # being dropped as an event this receiver does not handle.
+    assert result.status != "ignored"
+
+
+def test_an_unrelated_event_type_is_still_ignored() -> None:
+    receiver = EventarcReceiver(
+        config=ReceiverConfig(project_id="project-a", database="control"),
+        store=InMemoryExecutionStore(),
+        dispatch=lambda _: pytest.fail("a deletion must not dispatch"),
+        provenance_verifier=lambda _: None,
+        control_reader=lambda _: {},
+    )
+
+    result = receiver.handle({"type": "google.cloud.firestore.document.v1.deleted"})
+
+    assert result.status == "ignored"
