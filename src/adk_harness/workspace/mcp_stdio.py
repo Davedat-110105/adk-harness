@@ -20,7 +20,13 @@ from adk_harness.auth.credentials import CredentialPurpose
 from adk_harness.auth.google import GoogleAuthenticator, GoogleAuthError
 from adk_harness.workspace.app import APPLICATION_SCOPES
 from adk_harness.workspace.approval_page import ApprovalServer
-from adk_harness.workspace.evidence import EvidenceWriter, intent_hash
+from adk_harness.workspace.evidence import POLICY_VERSION, EvidenceWriter, intent_hash
+from adk_harness.workspace.registry import (
+    AgentCatalogue,
+    MemoryBank,
+    agent_id,
+    firestore_client,
+)
 from adk_harness.workspace.tools import (
     PARAMETER_TYPES,
     SERVICES,
@@ -85,7 +91,25 @@ class ServerState:
         self.grant = grant
         specs = build_tools(grant) if grant else ()
         self.specs = {spec.name: spec for spec in specs}
+        self._publish(grant, specs)
         return specs
+
+    def _publish(self, grant: Grant | None, specs: tuple[ToolSpec, ...]) -> None:
+        """Tell the fleet what this machine can do, if there is a fleet."""
+        client = firestore_client()
+        if client is None or grant is None:
+            return
+        try:
+            AgentCatalogue(client).publish(
+                agent_id=agent_id(grant.subject),
+                subject=grant.subject,
+                operations=[spec.name for spec in specs],
+                granted_scopes=grant.scopes,
+                policy_version=POLICY_VERSION,
+            )
+        except Exception:
+            # A catalogue that cannot be reached must not stop the tools working.
+            return
 
 
 def _summary(spec: ToolSpec, arguments: Mapping[str, Any]) -> str:
@@ -309,6 +333,65 @@ def _governance_audit(state: ServerState) -> dict[str, Any]:
     }
 
 
+def _advertise_changing_tools(server: Any) -> None:
+    """Let the client know the tool list moves.
+
+    FastMCP builds its initialization options with no notification options, so
+    it advertises tools.listChanged as false and a client has no reason to ask
+    for the tool list again. The grant decides the tools, so it must be true.
+    """
+    from mcp.server.lowlevel.server import NotificationOptions
+
+    low_level = server._mcp_server
+    original_options = low_level.create_initialization_options
+
+    def initialization_options(
+        notification_options: Any = None, experimental_capabilities: Any = None
+    ) -> Any:
+        return original_options(
+            notification_options or NotificationOptions(tools_changed=True),
+            experimental_capabilities,
+        )
+
+    low_level.create_initialization_options = initialization_options
+
+
+def _workspace_status(state: ServerState, server: Any) -> dict[str, Any]:
+    """Report whether a Workspace grant was found, and why not."""
+    return {
+        "connected": state.grant is not None,
+        "subject": state.grant.subject if state.grant else None,
+        "granted_scopes": list(state.grant.scopes) if state.grant else [],
+        "tools": sorted(state.specs),
+        "startup_error": state.startup_error,
+        "client": _client_capabilities(server),
+    }
+
+
+def _discover_agents(service: str | None) -> dict[str, Any]:
+    """List the agents published to this organisation's project."""
+    client = firestore_client()
+    if client is None:
+        return {"agents": [], "reason": "no shared project is configured"}
+    try:
+        return {"agents": list(AgentCatalogue(client).discover(service=service))}
+    except Exception as exc:
+        return {"agents": [], "reason": f"{type(exc).__name__}: {exc}"}
+
+
+def _recall_decisions(state: ServerState, *, since_days: int, mine_only: bool) -> dict[str, Any]:
+    """Read back what this fleet decided, across sessions and machines."""
+    client = firestore_client()
+    if client is None:
+        return {"decisions": [], "reason": "no shared project is configured"}
+    actor = state.grant.subject if (mine_only and state.grant) else None
+    try:
+        recalled = MemoryBank(client).recall(since_days=since_days, actor=actor)
+    except Exception as exc:
+        return {"decisions": [], "reason": f"{type(exc).__name__}: {exc}"}
+    return {"decisions": [item.summary() for item in recalled]}
+
+
 async def _connect_ledger(
     state: ServerState, context: Any, project_id: str | None
 ) -> dict[str, Any]:
@@ -401,26 +484,11 @@ def build_server(
 ) -> tuple[Any, ServerState]:
     """Build the MCP server and the state its tools read."""
     from mcp.server.fastmcp import FastMCP
-    from mcp.server.lowlevel.server import NotificationOptions
 
     state = ServerState(make_authenticator)
     server = FastMCP("adk-harness")
 
-    # FastMCP builds its initialization options with no notification options, so
-    # it advertises tools.listChanged as false and a client has no reason to ask
-    # for the tool list again. The grant decides the tools, so it must be true.
-    low_level = server._mcp_server
-    original_options = low_level.create_initialization_options
-
-    def initialization_options(
-        notification_options: Any = None, experimental_capabilities: Any = None
-    ) -> Any:
-        return original_options(
-            notification_options or NotificationOptions(tools_changed=True),
-            experimental_capabilities,
-        )
-
-    low_level.create_initialization_options = initialization_options
+    _advertise_changing_tools(server)
 
     def make_handler(spec: ToolSpec) -> Any:
         """Build a handler whose signature is the operation's real parameters.
@@ -498,14 +566,7 @@ def build_server(
 
     def workspace_status() -> dict[str, Any]:
         """Report whether a Workspace grant was found, and why not."""
-        return {
-            "connected": state.grant is not None,
-            "subject": state.grant.subject if state.grant else None,
-            "granted_scopes": list(state.grant.scopes) if state.grant else [],
-            "tools": sorted(state.specs),
-            "startup_error": state.startup_error,
-            "client": _client_capabilities(server),
-        }
+        return _workspace_status(state, server)
 
     async def connect_ledger() -> dict[str, Any]:
         """Send this machine's decisions to a shared Firestore audit trail.
@@ -521,6 +582,14 @@ def build_server(
         """Every decision this session, oldest first, with its change hash."""
         return _governance_audit(state)
 
+    def discover_agents(service: str | None = None) -> dict[str, Any]:
+        """List the agents published to this organisation's project."""
+        return _discover_agents(service)
+
+    def recall_decisions(since_days: int = 30, mine_only: bool = True) -> dict[str, Any]:
+        """Read back what this fleet decided, across sessions and machines."""
+        return _recall_decisions(state, since_days=since_days, mine_only=mine_only)
+
     async def await_approval() -> dict[str, Any]:
         """Wait for the person to answer the approval card that is on screen.
 
@@ -534,6 +603,8 @@ def build_server(
         (governance_audit, "governance_audit"),
         (await_approval, "await_approval"),
         (connect_ledger, "connect_ledger"),
+        (discover_agents, "discover_agents"),
+        (recall_decisions, "recall_decisions"),
     ):
         server.add_tool(tool, name=name)
 
