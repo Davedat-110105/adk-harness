@@ -353,11 +353,18 @@ def _register_mcp_server(args: argparse.Namespace) -> int:
     }
     # Antigravity starts the server itself, so the client configuration has to
     # travel with the entry rather than through the shell.
+    environment: dict[str, str] = {}
     client_config = args.client_config or os.environ.get("ADK_HARNESS_GOOGLE_CLIENT_CONFIG")
     if client_config:
-        entry["env"] = {
-            "ADK_HARNESS_GOOGLE_CLIENT_CONFIG": str(Path(client_config).expanduser().resolve())
-        }
+        environment["ADK_HARNESS_GOOGLE_CLIENT_CONFIG"] = str(
+            Path(client_config).expanduser().resolve()
+        )
+    # An administrator sets this once and every machine writes to one trail.
+    project = args.gcp_project or os.environ.get("GOOGLE_CLOUD_PROJECT")
+    if project:
+        environment["GOOGLE_CLOUD_PROJECT"] = project
+    if environment:
+        entry["env"] = environment
     servers["adk-harness"] = entry
     config["mcpServers"] = servers
     try:
@@ -408,6 +415,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--select-project", help="verified select_project checkpoint JSON")
     parser.add_argument("--plugin-dir", help="destination for install-plugin")
     parser.add_argument("--mcp-config", help="Antigravity mcp_config.json to register in")
+    parser.add_argument("--gcp-project", help="Google Cloud project holding the audit ledger")
     args = parser.parse_args(argv)
     if args.command == "doctor":
         return asyncio.run(_doctor())

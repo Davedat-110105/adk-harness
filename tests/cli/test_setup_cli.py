@@ -134,3 +134,26 @@ def test_install_plugin_creates_the_config_when_absent(tmp_path) -> None:
     )
 
     assert "adk-harness" in json.loads(config.read_text(encoding="utf-8"))["mcpServers"]
+
+
+def test_install_plugin_records_the_audit_project(tmp_path) -> None:
+    """One setting, pushed to every machine, and nobody is asked."""
+    config = tmp_path / "mcp_config.json"
+
+    assert (
+        main(
+            [
+                "install-plugin",
+                "--plugin-dir",
+                str(tmp_path / "plugin"),
+                "--mcp-config",
+                str(config),
+                "--gcp-project",
+                "model-creek-506520-u4",
+            ]
+        )
+        == 0
+    )
+
+    entry = json.loads(config.read_text(encoding="utf-8"))["mcpServers"]["adk-harness"]
+    assert entry["env"]["GOOGLE_CLOUD_PROJECT"] == "model-creek-506520-u4"
