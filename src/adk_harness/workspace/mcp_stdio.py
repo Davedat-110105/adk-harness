@@ -260,6 +260,45 @@ async def _ask_person(
     return decided
 
 
+async def _await_approval(state: ServerState) -> dict[str, Any]:
+    """Wait for the person to answer the approval card that is on screen.
+
+    Call this straight after showing the card. It returns when they press a
+    button, so nobody has to type.
+    """
+    pending = state.approvals.oldest_pending()
+    if pending is None:
+        return {"waiting": False, "reason": "no approval is on screen"}
+    answered = await asyncio.to_thread(pending.wait, APPROVAL_TIMEOUT_SECONDS)
+    if answered is None:
+        return {
+            "waiting": True,
+            "answered": False,
+            "reason": "nobody answered yet; ask them to press a button",
+        }
+    return {
+        "waiting": True,
+        "answered": True,
+        "approved": answered,
+        "operation": pending.operation,
+        "reason": (
+            f"the person approved {pending.operation}; call that tool again with "
+            "exactly the same arguments"
+            if answered
+            else f"the person declined {pending.operation}; nothing ran, and do not retry"
+        ),
+    }
+
+
+def _governance_audit(state: ServerState) -> dict[str, Any]:
+    """Every decision this session, oldest first, with its change hash."""
+    return {
+        "project": state.evidence.project_id,
+        "ledger": "firestore" if state.evidence.ledger else "session only",
+        "decisions": [evidence.summary() for evidence in state.evidence.trail],
+    }
+
+
 async def _connect_ledger(
     state: ServerState, context: Any, project_id: str | None
 ) -> dict[str, Any]:
@@ -470,15 +509,24 @@ def build_server(
 
     def governance_audit() -> dict[str, Any]:
         """Every decision this session, oldest first, with its change hash."""
-        return {
-            "project": state.evidence.project_id,
-            "ledger": "firestore" if state.evidence.ledger else "session only",
-            "decisions": [evidence.summary() for evidence in state.evidence.trail],
-        }
+        return _governance_audit(state)
 
-    server.add_tool(workspace_status, name="workspace_status")
-    server.add_tool(governance_audit, name="governance_audit")
-    server.add_tool(connect_ledger, name="connect_ledger")
+    async def await_approval() -> dict[str, Any]:
+        """Wait for the person to answer the approval card that is on screen.
+
+        Call this straight after showing the card. It returns when they press a
+        button, so nobody has to type.
+        """
+        return await _await_approval(state)
+
+    for tool, name in (
+        (workspace_status, "workspace_status"),
+        (governance_audit, "governance_audit"),
+        (await_approval, "await_approval"),
+        (connect_ledger, "connect_ledger"),
+    ):
+        server.add_tool(tool, name=name)
+
     return server, state
 
 

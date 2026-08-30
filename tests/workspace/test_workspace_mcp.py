@@ -532,3 +532,48 @@ async def test_calling_again_waits_for_the_card_instead_of_asking_twice(
 
     assert second["outcome"] == "allowed"
     assert calls == [("calendar.events.insert", EVENT)]
+
+
+async def test_await_approval_returns_when_the_button_is_pressed(connected: Any) -> None:
+    """The card is on screen; this is what saves the person from typing."""
+    import asyncio
+    import threading
+
+    server, state, _calls = connected
+    monkeypatch_timeout = 5.0
+    mcp_stdio.APPROVAL_TIMEOUT_SECONDS = monkeypatch_timeout
+
+    await _call_tool(server, "calendar_events_insert", EVENT, None)
+    pending = next(iter(state.approvals._pending.values()))
+    threading.Timer(0.2, lambda: pending.resolve(True)).start()
+
+    answer = await asyncio.wait_for(_call_tool(server, "await_approval", {}, None), timeout=8)
+
+    assert answer["answered"] is True
+    assert answer["approved"] is True
+    assert "calendar.events.insert" in answer["operation"]
+
+
+async def test_await_approval_says_so_when_nothing_is_waiting(connected: Any) -> None:
+    server, _state, _calls = connected
+
+    answer = await _call_tool(server, "await_approval", {}, None)
+
+    assert answer["waiting"] is False
+
+
+async def test_await_approval_reports_a_refusal(connected: Any) -> None:
+    import threading
+
+    server, state, calls = connected
+    mcp_stdio.APPROVAL_TIMEOUT_SECONDS = 5.0
+
+    await _call_tool(server, "calendar_events_insert", EVENT, None)
+    pending = next(iter(state.approvals._pending.values()))
+    threading.Timer(0.2, lambda: pending.resolve(False)).start()
+
+    answer = await _call_tool(server, "await_approval", {}, None)
+
+    assert answer["approved"] is False
+    assert "declined" in answer["reason"]
+    assert calls == []

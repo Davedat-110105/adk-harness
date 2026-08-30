@@ -338,6 +338,10 @@ class ApprovalServer:
                 return item, f"http://127.0.0.1:{self.port}/approve/{item.token}"
         return self.offer(operation=operation, arguments=arguments, change_hash=change_hash)
 
+    def oldest_pending(self) -> PendingApproval | None:
+        """Return the card still waiting for somebody, if there is one."""
+        return next(iter(list(self._pending.values())), None)
+
     def waiting_for(self, change_hash: str) -> PendingApproval | None:
         """Return the approval already on screen for this change, if any."""
         for item in self._pending.values():
