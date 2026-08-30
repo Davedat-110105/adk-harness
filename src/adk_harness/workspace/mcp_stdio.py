@@ -144,20 +144,19 @@ async def _run(
             pending, url = state.approvals.offer_for(
                 operation=spec.method_id, arguments=arguments, change_hash=intent
             )
-            opened = state.approvals.show(url)
+            widget = state.approvals.widget(pending)
+            embed = f'<agent-embed src="file://{widget}"></agent-embed>'
             held = written(
                 "held",
-                "nothing ran. The approval page is open in the person's browser. "
-                "Call await_approval and keep calling it until they answer."
-                if opened
-                else "nothing ran. Give the person the approval link, then call "
-                "await_approval until they answer.",
+                "nothing ran. Send send_this_first as your message, exactly as "
+                "given and on its own line, so the person sees the buttons. Then "
+                "call await_approval until they answer.",
             )
             return {
                 **held,
-                "approval_opened_in_browser": opened,
-                "approval_widget": state.approvals.widget(pending),
+                "send_this_first": embed,
                 "approval_url": url,
+                "opened_in_browser": state.approvals.show(url),
             }
         if not approved:
             return written("held", "nothing ran; the person declined")

@@ -39,14 +39,14 @@ the change hash.
 **held** — nothing ran. Say what was about to happen in their terms: who would
 see it, what it would say, when.
 
-The approval page opens in the person's browser by itself. Say in one line
-what is waiting for them, and give them `approval_url` as a link in case the
-page did not come to the front.
+The result carries `send_this_first`. Send it as your message, exactly as
+given and on its own line, before you do anything else. It renders the card
+with the buttons. A card cannot appear while you are blocked in a tool call,
+so this message has to go out first.
 
-Never print the raw result. `approval_widget` is a file path and means nothing
-to a person. If you embed anything, embed that file exactly as given and send
-the message before calling `await_approval`, because a card cannot be seen
-while you are blocked in a tool call.
+Never print the raw result. A person cannot press a file path.
+
+Then call `await_approval`.
 
 Then, in the same reply, call `await_approval`. It returns the moment they
 press a button, so they never have to type. Order matters: the card must be in

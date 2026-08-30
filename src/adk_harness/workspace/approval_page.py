@@ -332,7 +332,9 @@ class ApprovalServer:
         path instead. A person who cannot see the question cannot answer it, so
         the harness opens the page itself rather than depending on that.
         """
-        if os.environ.get("ADK_HARNESS_NO_BROWSER"):
+        # Off by default: the card belongs in the conversation, and a browser
+        # tab stealing focus mid-demo is worse than a card nobody rendered.
+        if not os.environ.get("ADK_HARNESS_OPEN_BROWSER"):
             return False
         try:
             import webbrowser

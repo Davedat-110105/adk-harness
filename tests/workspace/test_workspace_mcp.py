@@ -603,13 +603,26 @@ async def test_the_approval_page_is_opened_for_the_person(
 
     result = await _call_tool(server, "calendar_events_insert", EVENT, None)
 
-    assert result["approval_opened_in_browser"] is True
+    assert result["opened_in_browser"] is True
     assert opened == [result["approval_url"]]
 
 
-def test_opening_can_be_turned_off(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_the_browser_stays_shut_unless_asked(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The card belongs in the conversation, not in a tab that steals focus."""
     from adk_harness.workspace.approval_page import ApprovalServer
 
-    monkeypatch.setenv("ADK_HARNESS_NO_BROWSER", "1")
+    monkeypatch.delenv("ADK_HARNESS_OPEN_BROWSER", raising=False)
 
     assert ApprovalServer().show("http://127.0.0.1:1/approve/x") is False
+
+
+async def test_the_held_result_carries_the_line_to_send(connected: Any) -> None:
+    """The model dumped JSON when left to compose it, so hand it the line."""
+    server, _state, _calls = connected
+
+    result = await _call_tool(server, "calendar_events_insert", EVENT, None)
+
+    embed = result["send_this_first"]
+    assert embed.startswith('<agent-embed src="file:///')
+    assert embed.endswith("></agent-embed>")
+    assert "adk-harness-approve-" in embed
