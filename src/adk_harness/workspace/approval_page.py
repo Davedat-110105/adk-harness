@@ -11,14 +11,55 @@ and that path stops working the moment it is answered.
 from __future__ import annotations
 
 import secrets
+import tempfile
 import threading
 from collections.abc import Mapping
 from dataclasses import dataclass, field
+from html import escape
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
 __all__ = ["ApprovalServer", "PendingApproval"]
+
+# Rendered inline in the client's own chat. Tailwind is the one allowlisted
+# stylesheet there, and the theme variables come from the host.
+_WIDGET = """<!DOCTYPE html>
+<html><head>
+<script src="https://www.gstatic.com/antigravity/web/dev/tailwindcss.min.js"></script>
+</head>
+<body class="bg-transparent text-[var(--foreground)] antialiased p-4">
+<div id="card" class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-4">
+  <h2 class="font-semibold">This change needs your approval</h2>
+  <p class="text-[var(--muted-foreground)] text-sm mt-1">{operation}</p>
+  <p class="text-[var(--muted-foreground)] text-xs mt-2 font-mono break-all">{arguments}</p>
+  <p class="text-[var(--muted-foreground)] text-xs mt-1 font-mono break-all">{change_hash}</p>
+  <div id="buttons" class="mt-4 flex gap-2">
+    <button onclick="answer('yes')"
+      class="px-3 py-1.5 rounded-md bg-[var(--primary)] text-[var(--primary-foreground)]">
+      Approve</button>
+    <button onclick="answer('no')"
+      class="px-3 py-1.5 rounded-md bg-[var(--secondary)] text-[var(--secondary-foreground)]">
+      Decline</button>
+  </div>
+  <p id="done" class="text-[var(--muted-foreground)] text-sm mt-3"></p>
+</div>
+<script>
+function answer(choice) {{
+  document.getElementById('buttons').remove();
+  fetch('{base}/' + choice, {{method: 'POST'}})
+    .then(() => {{
+      document.getElementById('done').textContent =
+        choice === 'yes' ? 'Approved. Tell the agent to continue.' : 'Declined. Nothing ran.';
+    }})
+    .catch(e => {{
+      document.getElementById('done').textContent = 'Could not reach the harness: ' + e;
+    }});
+}}
+</script>
+</body></html>
+"""
 
 _PAGE = """<!doctype html>
 <html><head><meta charset="utf-8"><title>Approve this change</title>
@@ -109,6 +150,8 @@ class ApprovalServer:
                 def _send(self, html: str, status: int = 200) -> None:
                     body = html.encode("utf-8")
                     self.send_response(status)
+                    # The card is rendered in the client's own frame.
+                    self.send_header("Access-Control-Allow-Origin", "*")
                     self.send_header("Content-Type", "text/html; charset=utf-8")
                     self.send_header("Content-Length", str(len(body)))
                     self.send_header("Cache-Control", "no-store")
@@ -151,6 +194,19 @@ class ApprovalServer:
             self._httpd = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
             thread = threading.Thread(target=self._httpd.serve_forever, daemon=True)
             thread.start()
+
+    def widget(self, item: PendingApproval) -> str:
+        """Write the inline card for one pending change and return its path."""
+        base = f"http://127.0.0.1:{self.port}/approve/{item.token}"
+        html = _WIDGET.format(
+            operation=escape(item.operation),
+            arguments=escape(str(item.arguments)),
+            change_hash=escape(item.change_hash),
+            base=base,
+        )
+        path = Path(tempfile.gettempdir()) / f"adk-harness-approve-{item.token}.html"
+        path.write_text(html, encoding="utf-8")
+        return str(path)
 
     def offer(
         self, *, operation: str, arguments: Mapping[str, Any], change_hash: str

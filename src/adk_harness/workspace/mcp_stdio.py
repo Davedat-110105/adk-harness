@@ -126,15 +126,19 @@ async def _run(
         if approved is None:
             # The client will not carry the question, so hand over the link and
             # let the person answer it directly.
-            _pending, url = state.approvals.offer_for(
+            pending, url = state.approvals.offer_for(
                 operation=spec.method_id, arguments=arguments, change_hash=intent
             )
             held = written(
                 "held",
-                "nothing ran. Give the person this link to approve or decline, "
-                "then call this tool again with the same arguments.",
+                "nothing ran. Show the person the approval card, then call this "
+                "tool again with the same arguments once they have approved.",
             )
-            return {**held, "approval_url": url}
+            return {
+                **held,
+                "approval_widget": state.approvals.widget(pending),
+                "approval_url": url,
+            }
         if not approved:
             return written("held", "nothing ran; the person declined")
 

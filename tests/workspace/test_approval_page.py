@@ -85,3 +85,40 @@ def test_the_page_listens_only_on_the_loopback_address() -> None:
 
     assert server._httpd is not None
     assert server._httpd.server_address[0] == "127.0.0.1"
+
+
+def test_the_inline_card_posts_back_to_this_server() -> None:
+    """The card renders in the client's chat and answers over the loopback."""
+    from pathlib import Path
+
+    server = ApprovalServer()
+    pending, url = server.offer(
+        operation="calendar.events.insert",
+        arguments={"calendarId": "primary"},
+        change_hash="feedface",
+    )
+
+    html = Path(server.widget(pending)).read_text(encoding="utf-8")
+
+    assert "calendar.events.insert" in html
+    assert "feedface" in html
+    assert f"{url}/' + choice" in html
+    assert "Approve" in html and "Decline" in html
+    assert "gstatic.com/antigravity" in html
+
+
+def test_the_card_escapes_what_it_shows() -> None:
+    """Arguments come from a model; they are shown, never executed."""
+    from pathlib import Path
+
+    server = ApprovalServer()
+    pending, _url = server.offer(
+        operation="calendar.events.insert",
+        arguments={"summary": "<script>alert(1)</script>"},
+        change_hash="h",
+    )
+
+    html = Path(server.widget(pending)).read_text(encoding="utf-8")
+
+    assert "<script>alert(1)</script>" not in html
+    assert "&lt;script&gt;" in html
