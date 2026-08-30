@@ -7,6 +7,8 @@ this process without passing through the model.
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
 import inspect
 import os
 from collections.abc import Callable, Mapping
@@ -17,6 +19,7 @@ from pydantic import BaseModel, Field
 from adk_harness.auth.credentials import CredentialPurpose
 from adk_harness.auth.google import GoogleAuthenticator, GoogleAuthError
 from adk_harness.workspace.app import APPLICATION_SCOPES
+from adk_harness.workspace.approval_page import ApprovalServer
 from adk_harness.workspace.evidence import EvidenceWriter
 from adk_harness.workspace.tools import (
     PARAMETER_TYPES,
@@ -30,6 +33,9 @@ from adk_harness.workspace.tools import (
 )
 
 __all__ = ["ApprovalAnswer", "ServerState", "build_server", "serve"]
+
+# Long enough to read a change, short enough that a forgotten tab expires.
+APPROVAL_TIMEOUT_SECONDS = float(os.environ.get("ADK_HARNESS_APPROVAL_TIMEOUT", "180"))
 
 
 class LedgerTarget(BaseModel):
@@ -55,6 +61,7 @@ class ServerState:
         self.specs: dict[str, ToolSpec] = {}
         self.startup_error: str | None = None
         self.evidence = EvidenceWriter(ledger=_ledger())
+        self.approvals = ApprovalServer()
 
     @property
     def authenticator(self) -> GoogleAuthenticator:
@@ -110,24 +117,19 @@ async def _run(
         return written("blocked", decision.reason)
 
     if decision.outcome == "held":
-        try:
-            answer = await context.elicit(
-                message=f"Approve {_summary(spec, arguments)}? {decision.reason}",
-                schema=ApprovalAnswer,
-            )
-        except Exception:
-            # A client that cannot ask has not approved anything.
-            return written("held", "nothing ran; this client cannot ask a person")
-        if answer.action != "accept" or not answer.data or not answer.data.approve:
+        approved = await _ask_person(state, context, spec, arguments, change.content_hash)
+        if approved is None:
+            return written("held", "nothing ran; nobody could be asked")
+        if not approved:
             return written("held", "nothing ran; the person did not approve")
 
         approval = state.evidence.approve(
             change,
             approver=grant.subject,
-            scope={"operation": spec.method_id, "rationale": answer.data.reason},
+            scope={"operation": spec.method_id},
         )
         result = execute(grant, spec, arguments)
-        recorded = written("allowed", answer.data.reason or "approved", approval)
+        recorded = written("allowed", "approved by the person", approval)
         return {**recorded, "result": result}
 
     result = execute(grant, spec, arguments)
@@ -190,6 +192,41 @@ def _client_capabilities(server: Any) -> dict[str, Any]:
         "sampling": capabilities.sampling is not None,
         "roots": capabilities.roots is not None,
     }
+
+
+async def _ask_person(
+    state: ServerState,
+    context: Any,
+    spec: ToolSpec,
+    arguments: Mapping[str, Any],
+    change_hash: str,
+) -> bool | None:
+    """Ask through a page the person opens, not through the conversation.
+
+    The answer travels from their browser to this process. The model is handed
+    a link and never sees the question, so it cannot answer on their behalf.
+    """
+    pending, url = state.approvals.offer(
+        operation=spec.method_id, arguments=arguments, change_hash=change_hash
+    )
+    try:
+        answer = await context.elicit_url(
+            message=f"Approve {spec.method_id}? Open the link to decide.",
+            url=url,
+            elicitation_id=pending.token,
+        )
+    except Exception:
+        state.approvals.withdraw(pending)
+        return None
+    if getattr(answer, "action", None) != "accept":
+        state.approvals.withdraw(pending)
+        return None
+
+    decided = await asyncio.to_thread(pending.wait, APPROVAL_TIMEOUT_SECONDS)
+    state.approvals.withdraw(pending)
+    with contextlib.suppress(Exception):
+        await context.session.send_elicit_complete(pending.token)
+    return decided
 
 
 async def _connect_ledger(

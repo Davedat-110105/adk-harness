@@ -105,29 +105,34 @@ async def test_a_read_runs_without_asking(connected: Any) -> None:
     assert calls == [("calendar.events.list", {"calendarId": "primary"})]
 
 
-async def test_a_write_runs_only_after_the_person_approves(connected: Any) -> None:
+async def test_a_write_runs_only_after_the_person_approves(
+    connected: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
     server, _state, calls = connected
     asked: list[str] = []
 
-    async def approve(context: Any, params: Any) -> Any:
-        asked.append(params.message)
-        return types.ElicitResult(action="accept", content={"approve": True, "reason": "mine"})
+    async def approves(state, context, spec, arguments, change_hash):
+        asked.append(spec.method_id)
+        return True
 
-    result = await _call(server, "calendar_events_insert", {"calendarId": "primary"}, approve)
+    monkeypatch.setattr(mcp_stdio, "_ask_person", approves)
+    result = await _call(server, "calendar_events_insert", {"calendarId": "primary"}, None)
 
     assert not result.isError
-    assert len(asked) == 1
-    assert "calendar.events.insert" in asked[0]
+    assert asked == ["calendar.events.insert"]
     assert calls == [("calendar.events.insert", {"calendarId": "primary"})]
 
 
-async def test_a_declined_write_runs_nothing(connected: Any) -> None:
+async def test_a_declined_write_runs_nothing(
+    connected: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
     server, _state, calls = connected
 
-    async def decline(context: Any, params: Any) -> Any:
-        return types.ElicitResult(action="decline")
+    async def declines(state, context, spec, arguments, change_hash):
+        return False
 
-    result = await _call(server, "calendar_events_insert", {"calendarId": "primary"}, decline)
+    monkeypatch.setattr(mcp_stdio, "_ask_person", declines)
+    result = await _call(server, "calendar_events_insert", {"calendarId": "primary"}, None)
 
     assert not result.isError
     assert calls == []
@@ -159,6 +164,7 @@ def test_the_server_advertises_that_its_tool_list_changes(connected: Any) -> Non
 
 
 async def test_a_client_that_cannot_ask_runs_nothing(connected: Any) -> None:
+    """No elicitation callback at all, so the link is never accepted."""
     server, _state, calls = connected
 
     result = await _call(server, "calendar_events_insert", {"calendarId": "primary"}, None)
@@ -253,15 +259,18 @@ def test_push_notification_plumbing_is_not_offered(connected: Any) -> None:
     assert "calendar_channels_stop" not in server._tool_manager._tools
 
 
-async def test_an_approval_is_bound_to_the_exact_arguments(connected: Any) -> None:
+async def test_an_approval_is_bound_to_the_exact_arguments(
+    connected: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """An approval for one call must not cover a different one."""
     server, state, _calls = connected
 
-    async def approve(context: Any, params: Any) -> Any:
-        return types.ElicitResult(action="accept", content={"approve": True, "reason": "mine"})
+    async def approves(state_, context, spec, arguments, change_hash):
+        return True
 
-    await _call(server, "calendar_events_insert", {"calendarId": "primary"}, approve)
-    await _call(server, "calendar_events_insert", {"calendarId": "team"}, approve)
+    monkeypatch.setattr(mcp_stdio, "_ask_person", approves)
+    await _call(server, "calendar_events_insert", {"calendarId": "primary"}, None)
+    await _call(server, "calendar_events_insert", {"calendarId": "team"}, None)
 
     approvals = [item.approval for item in state.evidence.trail if item.approval]
     assert len(approvals) == 2
@@ -269,13 +278,16 @@ async def test_an_approval_is_bound_to_the_exact_arguments(connected: Any) -> No
     assert all(item.approver_id == "person@example.com" for item in approvals)
 
 
-async def test_a_refusal_is_recorded_rather_than_forgotten(connected: Any) -> None:
+async def test_a_refusal_is_recorded_rather_than_forgotten(
+    connected: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
     server, state, calls = connected
 
-    async def decline(context: Any, params: Any) -> Any:
-        return types.ElicitResult(action="decline")
+    async def declines(state_, context, spec, arguments, change_hash):
+        return False
 
-    await _call(server, "calendar_events_insert", {"calendarId": "primary"}, decline)
+    monkeypatch.setattr(mcp_stdio, "_ask_person", declines)
+    await _call(server, "calendar_events_insert", {"calendarId": "primary"}, None)
 
     held = [item for item in state.evidence.trail if item.event.event_type == "held"]
     assert calls == []

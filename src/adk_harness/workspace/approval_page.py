@@ -1,0 +1,168 @@
+"""A local page where a person approves one change, outside the model's reach.
+
+The client hands the person a link and the answer travels from their browser
+straight back to this process. The model sees a link and, later, an outcome; it
+never sees the question and cannot answer it.
+
+Each pending change gets one unguessable path, bound to the loopback address,
+and that path stops working the moment it is answered.
+"""
+
+from __future__ import annotations
+
+import secrets
+import threading
+from collections.abc import Mapping
+from dataclasses import dataclass, field
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from typing import Any
+from urllib.parse import urlparse
+
+__all__ = ["ApprovalServer", "PendingApproval"]
+
+_PAGE = """<!doctype html>
+<html><head><meta charset="utf-8"><title>Approve this change</title>
+<style>
+ body{{font:15px -apple-system,system-ui,sans-serif;margin:0;padding:2.5rem;
+      background:#0f1115;color:#e6e8ee}}
+ main{{max-width:34rem;margin:0 auto}}
+ h1{{font-size:1.1rem;margin:0 0 1.25rem}}
+ dl{{display:grid;grid-template-columns:9rem 1fr;gap:.5rem 1rem;margin:0 0 1.5rem}}
+ dt{{color:#9aa3b2}} dd{{margin:0;word-break:break-word}}
+ code{{font-size:.85em;color:#c9d1e4}}
+ form{{display:inline}}
+ button{{font:inherit;padding:.6rem 1.1rem;border-radius:.4rem;border:0;cursor:pointer}}
+ .yes{{background:#2f6f4f;color:#fff;margin-right:.5rem}}
+ .no{{background:#2a2e38;color:#e6e8ee}}
+ p.done{{color:#9aa3b2}}
+</style></head>
+<body><main>
+<h1>{heading}</h1>
+<dl>
+ <dt>Operation</dt><dd><code>{operation}</code></dd>
+ <dt>Details</dt><dd><code>{arguments}</code></dd>
+ <dt>Change hash</dt><dd><code>{change_hash}</code></dd>
+</dl>
+{body}
+</main></body></html>
+"""
+
+_CHOICES = """<form method="post" action="{path}/yes"><button class="yes">Approve</button></form>
+<form method="post" action="{path}/no"><button class="no">Decline</button></form>"""
+
+
+@dataclass
+class PendingApproval:
+    """One change waiting for a person."""
+
+    token: str
+    operation: str
+    arguments: Mapping[str, Any]
+    change_hash: str
+    answered: threading.Event = field(default_factory=threading.Event)
+    approved: bool = False
+
+    def resolve(self, approved: bool) -> None:
+        self.approved = approved
+        self.answered.set()
+
+    def wait(self, timeout: float) -> bool | None:
+        """Return the answer, or None when nobody answered in time."""
+        if not self.answered.wait(timeout):
+            return None
+        return self.approved
+
+
+class ApprovalServer:
+    """Serve one approval page per pending change, on the loopback address."""
+
+    def __init__(self) -> None:
+        self._pending: dict[str, PendingApproval] = {}
+        self._httpd: ThreadingHTTPServer | None = None
+        self._lock = threading.Lock()
+
+    @property
+    def port(self) -> int:
+        self._start()
+        assert self._httpd is not None
+        return self._httpd.server_address[1]
+
+    def _start(self) -> None:
+        with self._lock:
+            if self._httpd is not None:
+                return
+            pending = self._pending
+
+            class Handler(BaseHTTPRequestHandler):
+                def log_message(self, format: str, *args: object) -> None:
+                    """Keep the request line out of the server's output."""
+
+                def _find(self) -> tuple[PendingApproval | None, str]:
+                    parts = urlparse(self.path).path.strip("/").split("/")
+                    if not parts or parts[0] != "approve":
+                        return None, ""
+                    token = parts[1] if len(parts) > 1 else ""
+                    return pending.get(token), parts[2] if len(parts) > 2 else ""
+
+                def _send(self, html: str, status: int = 200) -> None:
+                    body = html.encode("utf-8")
+                    self.send_response(status)
+                    self.send_header("Content-Type", "text/html; charset=utf-8")
+                    self.send_header("Content-Length", str(len(body)))
+                    self.send_header("Cache-Control", "no-store")
+                    self.end_headers()
+                    self.wfile.write(body)
+
+                def do_GET(self) -> None:
+                    item, _ = self._find()
+                    if item is None:
+                        self._send("<p>This request is no longer waiting.</p>", 404)
+                        return
+                    self._send(
+                        _PAGE.format(
+                            heading="Approve this change?",
+                            operation=item.operation,
+                            arguments=item.arguments,
+                            change_hash=item.change_hash,
+                            body=_CHOICES.format(path=f"/approve/{item.token}"),
+                        )
+                    )
+
+                def do_POST(self) -> None:
+                    item, answer = self._find()
+                    if item is None or answer not in ("yes", "no"):
+                        self._send("<p>This request is no longer waiting.</p>", 404)
+                        return
+                    item.resolve(answer == "yes")
+                    pending.pop(item.token, None)
+                    self._send(
+                        _PAGE.format(
+                            heading="Approved" if item.approved else "Declined",
+                            operation=item.operation,
+                            arguments=item.arguments,
+                            change_hash=item.change_hash,
+                            body="<p class='done'>You can close this tab.</p>",
+                        )
+                    )
+
+            self._httpd = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+            thread = threading.Thread(target=self._httpd.serve_forever, daemon=True)
+            thread.start()
+
+    def offer(
+        self, *, operation: str, arguments: Mapping[str, Any], change_hash: str
+    ) -> tuple[PendingApproval, str]:
+        """Register a pending change and return it with the link to answer it."""
+        self._start()
+        item = PendingApproval(
+            token=secrets.token_urlsafe(24),
+            operation=operation,
+            arguments=dict(arguments),
+            change_hash=change_hash,
+        )
+        self._pending[item.token] = item
+        return item, f"http://127.0.0.1:{self.port}/approve/{item.token}"
+
+    def withdraw(self, item: PendingApproval) -> None:
+        """Stop accepting an answer nobody gave in time."""
+        self._pending.pop(item.token, None)
