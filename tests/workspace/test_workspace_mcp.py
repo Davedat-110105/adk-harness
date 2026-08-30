@@ -433,3 +433,59 @@ async def test_status_reports_whether_the_client_can_be_asked(connected: Any) ->
 
     assert status["client"]["known"] is True
     assert status["client"]["elicitation"] is True
+
+
+async def test_a_client_that_will_not_ask_gets_a_link_instead(connected: Any) -> None:
+    """Antigravity declines elicitation, so the person answers out of band."""
+    server, _state, calls = connected
+
+    result = await _call_tool(
+        server, "calendar_events_insert", {"calendarId": "primary"}, None
+    )
+
+    assert calls == []
+    assert result["outcome"] == "held"
+    assert result["approval_url"].startswith("http://127.0.0.1:")
+    assert "/approve/" in result["approval_url"]
+
+
+async def test_the_same_change_keeps_one_link(connected: Any) -> None:
+    """Asking twice must not leave two live approvals for one change."""
+    server, _state, _calls = connected
+
+    first = await _call_tool(server, "calendar_events_insert", {"calendarId": "primary"}, None)
+    second = await _call_tool(server, "calendar_events_insert", {"calendarId": "primary"}, None)
+
+    assert first["approval_url"] == second["approval_url"]
+
+
+async def test_an_answered_link_lets_the_next_call_run(connected: Any) -> None:
+    server, state, calls = connected
+
+    held = await _call_tool(server, "calendar_events_insert", {"calendarId": "primary"}, None)
+    token = held["approval_url"].rsplit("/", 1)[-1]
+    state.approvals._pending[token].resolve(True)
+    item = state.approvals._pending.pop(token)
+    state.approvals._granted[item.change_hash] = item
+
+    result = await _call_tool(server, "calendar_events_insert", {"calendarId": "primary"}, None)
+
+    assert result["outcome"] == "allowed"
+    assert calls == [("calendar.events.insert", {"calendarId": "primary"})]
+    assert result["evidence"]["approved_by"] == "person@example.com"
+
+
+async def test_approving_one_change_does_not_run_another(connected: Any) -> None:
+    """The approval is bound to the arguments the person was shown."""
+    server, state, calls = connected
+
+    held = await _call_tool(server, "calendar_events_insert", {"calendarId": "primary"}, None)
+    token = held["approval_url"].rsplit("/", 1)[-1]
+    state.approvals._pending[token].resolve(True)
+    item = state.approvals._pending.pop(token)
+    state.approvals._granted[item.change_hash] = item
+
+    other = await _call_tool(server, "calendar_events_insert", {"calendarId": "team"}, None)
+
+    assert other["outcome"] == "held"
+    assert calls == []

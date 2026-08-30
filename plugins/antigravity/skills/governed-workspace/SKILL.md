@@ -36,10 +36,17 @@ the change hash.
 
 **allowed** — it ran. Report what happened, with the id or link if there is one.
 
-**held** — nothing ran. The server asked the person directly and they declined,
-or this client cannot ask. Say what was about to happen in their terms: who
-would see it, what it would say, when. Do not retry it, and do not approve it
-yourself. You cannot; the question does not pass through you.
+**held** — nothing ran. Say what was about to happen in their terms: who would
+see it, what it would say, when.
+
+When the result carries an `approval_url`, give the person that link and ask
+them to open it. They approve or decline there, in their own browser. Once they
+say they have approved, call the same tool again with the same arguments and it
+will run. Changing any argument makes it a different change and needs its own
+approval.
+
+You cannot approve anything yourself. The link is not for you to open, and the
+decision never passes through this conversation.
 
 **blocked** — nothing ran, and nothing will. A decision, not an error. Report
 the reason and stop. Do not rephrase it, and do not reach for a different tool

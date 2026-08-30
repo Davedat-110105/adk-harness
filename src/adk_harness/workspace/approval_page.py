@@ -78,6 +78,7 @@ class ApprovalServer:
 
     def __init__(self) -> None:
         self._pending: dict[str, PendingApproval] = {}
+        self._granted: dict[str, PendingApproval] = {}
         self._httpd: ThreadingHTTPServer | None = None
         self._lock = threading.Lock()
 
@@ -92,6 +93,7 @@ class ApprovalServer:
             if self._httpd is not None:
                 return
             pending = self._pending
+            granted = self._granted
 
             class Handler(BaseHTTPRequestHandler):
                 def log_message(self, format: str, *args: object) -> None:
@@ -135,6 +137,7 @@ class ApprovalServer:
                         return
                     item.resolve(answer == "yes")
                     pending.pop(item.token, None)
+                    granted[item.change_hash] = item
                     self._send(
                         _PAGE.format(
                             heading="Approved" if item.approved else "Declined",
@@ -166,3 +169,20 @@ class ApprovalServer:
     def withdraw(self, item: PendingApproval) -> None:
         """Stop accepting an answer nobody gave in time."""
         self._pending.pop(item.token, None)
+
+    def offer_for(
+        self, *, operation: str, arguments: Mapping[str, Any], change_hash: str
+    ) -> tuple[PendingApproval, str]:
+        """Return the open link for this change, reusing one already waiting."""
+        for item in self._pending.values():
+            if item.change_hash == change_hash:
+                return item, f"http://127.0.0.1:{self.port}/approve/{item.token}"
+        return self.offer(operation=operation, arguments=arguments, change_hash=change_hash)
+
+    def answer_for(self, change_hash: str) -> bool | None:
+        """Return a decision already given for this exact change, once.
+
+        Consuming it means a second identical call needs its own approval.
+        """
+        item = self._granted.pop(change_hash, None)
+        return None if item is None else item.approved

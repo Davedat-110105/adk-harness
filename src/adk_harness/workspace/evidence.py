@@ -17,9 +17,24 @@ from uuid import uuid4
 
 from adk_harness.workflow.models import ActivityEvent, Approval, ChangeSet
 
-__all__ = ["Evidence", "EvidenceWriter"]
+__all__ = ["Evidence", "EvidenceWriter", "intent_hash"]
 
 POLICY_VERSION = "workspace-mcp-1"
+
+
+def intent_hash(*, subject: str, operation: str, arguments: Mapping[str, Any]) -> str:
+    """Hash what is being asked for, so two identical requests match.
+
+    A ChangeSet carries its own id and timestamp, so its content hash differs
+    every attempt. An approval has to survive being asked again, and must not
+    survive a change to the arguments.
+    """
+    import hashlib
+
+    import rfc8785
+
+    payload = {"subject": subject, "operation": operation, "arguments": dict(arguments)}
+    return hashlib.sha256(rfc8785.dumps(payload)).hexdigest()
 
 # An approval covers the call it was shown, not the rest of the session.
 APPROVAL_LIFETIME = timedelta(minutes=15)

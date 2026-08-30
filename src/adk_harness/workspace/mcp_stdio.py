@@ -20,7 +20,7 @@ from adk_harness.auth.credentials import CredentialPurpose
 from adk_harness.auth.google import GoogleAuthenticator, GoogleAuthError
 from adk_harness.workspace.app import APPLICATION_SCOPES
 from adk_harness.workspace.approval_page import ApprovalServer
-from adk_harness.workspace.evidence import EvidenceWriter
+from adk_harness.workspace.evidence import EvidenceWriter, intent_hash
 from adk_harness.workspace.tools import (
     PARAMETER_TYPES,
     SERVICES,
@@ -117,11 +117,26 @@ async def _run(
         return written("blocked", decision.reason)
 
     if decision.outcome == "held":
-        approved = await _ask_person(state, context, spec, arguments, change.content_hash)
+        intent = intent_hash(
+            subject=grant.subject, operation=spec.method_id, arguments=arguments
+        )
+        approved = state.approvals.answer_for(intent)
         if approved is None:
-            return written("held", "nothing ran; nobody could be asked")
+            approved = await _ask_person(state, context, spec, arguments, intent)
+        if approved is None:
+            # The client will not carry the question, so hand over the link and
+            # let the person answer it directly.
+            _pending, url = state.approvals.offer_for(
+                operation=spec.method_id, arguments=arguments, change_hash=intent
+            )
+            held = written(
+                "held",
+                "nothing ran. Give the person this link to approve or decline, "
+                "then call this tool again with the same arguments.",
+            )
+            return {**held, "approval_url": url}
         if not approved:
-            return written("held", "nothing ran; the person did not approve")
+            return written("held", "nothing ran; the person declined")
 
         approval = state.evidence.approve(
             change,
