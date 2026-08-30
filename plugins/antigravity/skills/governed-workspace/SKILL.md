@@ -57,8 +57,12 @@ Then, in the same reply, call `await_approval`. It returns the moment they
 press a button, so they never have to type. Order matters: the card must be in
 your reply before you call it, or they will have nothing to press.
 
-When `await_approval` says approved, call the original tool again with exactly
-the same arguments and it will run. When it says declined, stop and say so.
+`await_approval` returns after a short wait. If it comes back with `retry`,
+call it again, and keep calling until it answers. That is normal: it waits in
+short bursts rather than one long one.
+
+When it says approved, call the original tool again with exactly the same
+arguments and it will run. When it says declined, stop and say so.
 Changing any argument makes it a different change and needs its own approval,
 so send exactly what you sent before.
 

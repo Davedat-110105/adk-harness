@@ -577,3 +577,17 @@ async def test_await_approval_reports_a_refusal(connected: Any) -> None:
     assert answer["approved"] is False
     assert "declined" in answer["reason"]
     assert calls == []
+
+
+async def test_await_approval_asks_to_be_called_again_rather_than_hanging(
+    connected: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The client's tool timeout is unknown, so never bet on outlasting it."""
+    server, _state, _calls = connected
+    monkeypatch.setattr(mcp_stdio, "POLL_SECONDS", 0.1)
+
+    await _call_tool(server, "calendar_events_insert", EVENT, None)
+    answer = await _call_tool(server, "await_approval", {}, None)
+
+    assert answer["answered"] is False
+    assert answer["retry"] is True

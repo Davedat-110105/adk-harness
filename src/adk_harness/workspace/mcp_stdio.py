@@ -41,6 +41,9 @@ APPROVAL_TIMEOUT_SECONDS = float(os.environ.get("ADK_HARNESS_APPROVAL_TIMEOUT", 
 # conversation open waiting for a card the model may never have shown.
 RETRY_WAIT_SECONDS = float(os.environ.get("ADK_HARNESS_RETRY_WAIT", "2"))
 
+# One await_approval call blocks for this long, then asks to be called again.
+POLL_SECONDS = float(os.environ.get("ADK_HARNESS_POLL_SECONDS", "25"))
+
 
 class LedgerTarget(BaseModel):
     """Which Google Cloud project holds the shared decision trail."""
@@ -269,12 +272,15 @@ async def _await_approval(state: ServerState) -> dict[str, Any]:
     pending = state.approvals.oldest_pending()
     if pending is None:
         return {"waiting": False, "reason": "no approval is on screen"}
-    answered = await asyncio.to_thread(pending.wait, APPROVAL_TIMEOUT_SECONDS)
+    # Bounded waits, called repeatedly, rather than one long one. The client's
+    # tool-call timeout is undocumented, so never rely on outlasting it.
+    answered = await asyncio.to_thread(pending.wait, POLL_SECONDS)
     if answered is None:
         return {
             "waiting": True,
             "answered": False,
-            "reason": "nobody answered yet; ask them to press a button",
+            "retry": True,
+            "reason": "nobody has pressed a button yet; call await_approval again",
         }
     return {
         "waiting": True,
