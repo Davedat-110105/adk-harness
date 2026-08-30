@@ -8,6 +8,7 @@ this process without passing through the model.
 from __future__ import annotations
 
 import inspect
+import os
 from collections.abc import Callable, Mapping
 from typing import Any
 
@@ -16,6 +17,7 @@ from pydantic import BaseModel, Field
 from adk_harness.auth.credentials import CredentialPurpose
 from adk_harness.auth.google import GoogleAuthenticator, GoogleAuthError
 from adk_harness.workspace.app import APPLICATION_SCOPES
+from adk_harness.workspace.evidence import EvidenceWriter
 from adk_harness.workspace.tools import (
     PARAMETER_TYPES,
     SERVICES,
@@ -27,10 +29,10 @@ from adk_harness.workspace.tools import (
     resolve_grant,
 )
 
-__all__ = ["Approval", "ServerState", "build_server", "serve"]
+__all__ = ["ApprovalAnswer", "ServerState", "build_server", "serve"]
 
 
-class Approval(BaseModel):
+class ApprovalAnswer(BaseModel):
     """What a person is asked before a change others will see."""
 
     approve: bool = Field(description="Run this change now")
@@ -46,6 +48,7 @@ class ServerState:
         self.grant: Grant | None = None
         self.specs: dict[str, ToolSpec] = {}
         self.startup_error: str | None = None
+        self.evidence = EvidenceWriter(ledger=_ledger())
 
     @property
     def authenticator(self) -> GoogleAuthenticator:
@@ -73,49 +76,72 @@ def _summary(spec: ToolSpec, arguments: Mapping[str, Any]) -> str:
 async def _run(
     state: ServerState, name: str, arguments: Mapping[str, Any], context: Any
 ) -> dict[str, Any]:
-    """Judge one call, then run it, hold it, or refuse it."""
+    """Judge one call, record the decision, then run it, hold it, or refuse it."""
     grant = state.grant
     spec = state.specs.get(name)
     if grant is None or spec is None:
         return {"outcome": "blocked", "reason": "no Workspace grant is connected"}
 
+    change = state.evidence.propose(
+        subject=grant.subject, operation=spec.method_id, arguments=arguments
+    )
     decision = decide(spec)
+
+    def written(outcome: str, reason: str, approval: Any = None) -> dict[str, Any]:
+        evidence = state.evidence.record(
+            change,
+            actor=grant.subject,
+            operation=spec.method_id,
+            outcome=outcome,
+            reason=reason,
+            approval=approval,
+            arguments=arguments,
+        )
+        return {"outcome": outcome, "operation": spec.method_id, "reason": reason,
+                "evidence": evidence.summary()}
+
     if decision.outcome == "blocked":
-        return {"outcome": "blocked", "operation": spec.method_id, "reason": decision.reason}
+        return written("blocked", decision.reason)
 
     if decision.outcome == "held":
         try:
             answer = await context.elicit(
                 message=f"Approve {_summary(spec, arguments)}? {decision.reason}",
-                schema=Approval,
+                schema=ApprovalAnswer,
             )
         except Exception:
             # A client that cannot ask has not approved anything.
-            return {
-                "outcome": "held",
-                "operation": spec.method_id,
-                "reason": "nothing ran; this client cannot ask a person for approval",
-            }
+            return written("held", "nothing ran; this client cannot ask a person")
         if answer.action != "accept" or not answer.data or not answer.data.approve:
-            return {
-                "outcome": "held",
-                "operation": spec.method_id,
-                "reason": "nothing ran; the person did not approve",
-            }
-        result = execute(grant, spec, arguments)
-        return {
-            "outcome": "allowed",
-            "operation": spec.method_id,
-            "approved_by": grant.subject,
-            "rationale": answer.data.reason,
-            "result": result,
-        }
+            return written("held", "nothing ran; the person did not approve")
 
-    return {
-        "outcome": "allowed",
-        "operation": spec.method_id,
-        "result": execute(grant, spec, arguments),
-    }
+        approval = state.evidence.approve(
+            change,
+            approver=grant.subject,
+            scope={"operation": spec.method_id, "rationale": answer.data.reason},
+        )
+        result = execute(grant, spec, arguments)
+        recorded = written("allowed", answer.data.reason or "approved", approval)
+        return {**recorded, "result": result}
+
+    result = execute(grant, spec, arguments)
+    return {**written("allowed", decision.reason), "result": result}
+
+
+def _ledger() -> Any | None:
+    """Return a Firestore ledger when a project is configured, else nothing.
+
+    A local demo keeps its trail in memory. A fleet points every machine at one
+    project and the trail becomes shared.
+    """
+    if not os.environ.get("GOOGLE_CLOUD_PROJECT"):
+        return None
+    try:
+        from adk_harness.governance.ledger import FirestoreActionLedger
+
+        return FirestoreActionLedger()
+    except Exception:
+        return None
 
 
 def _annotations(spec: ToolSpec) -> dict[str, Any]:
@@ -276,7 +302,16 @@ def build_server(
             "startup_error": state.startup_error,
         }
 
+    def governance_audit() -> dict[str, Any]:
+        """Every decision this session, oldest first, with its change hash."""
+        return {
+            "project": state.evidence.project_id,
+            "ledger": "firestore" if state.evidence.ledger else "session only",
+            "decisions": [evidence.summary() for evidence in state.evidence.trail],
+        }
+
     server.add_tool(workspace_status, name="workspace_status")
+    server.add_tool(governance_audit, name="governance_audit")
     return server, state
 
 

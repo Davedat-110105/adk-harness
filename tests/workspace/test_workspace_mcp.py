@@ -251,3 +251,101 @@ def test_push_notification_plumbing_is_not_offered(connected: Any) -> None:
 
     assert "calendar_events_watch" not in server._tool_manager._tools
     assert "calendar_channels_stop" not in server._tool_manager._tools
+
+
+async def test_an_approval_is_bound_to_the_exact_arguments(connected: Any) -> None:
+    """An approval for one call must not cover a different one."""
+    server, state, _calls = connected
+
+    async def approve(context: Any, params: Any) -> Any:
+        return types.ElicitResult(action="accept", content={"approve": True, "reason": "mine"})
+
+    await _call(server, "calendar_events_insert", {"calendarId": "primary"}, approve)
+    await _call(server, "calendar_events_insert", {"calendarId": "team"}, approve)
+
+    approvals = [item.approval for item in state.evidence.trail if item.approval]
+    assert len(approvals) == 2
+    assert approvals[0].change_hash != approvals[1].change_hash
+    assert all(item.approver_id == "person@example.com" for item in approvals)
+
+
+async def test_a_refusal_is_recorded_rather_than_forgotten(connected: Any) -> None:
+    server, state, calls = connected
+
+    async def decline(context: Any, params: Any) -> Any:
+        return types.ElicitResult(action="decline")
+
+    await _call(server, "calendar_events_insert", {"calendarId": "primary"}, decline)
+
+    held = [item for item in state.evidence.trail if item.event.event_type == "held"]
+    assert calls == []
+    assert len(held) == 1
+    assert held[0].approval is None
+    assert held[0].change.content_hash
+
+
+async def test_the_audit_trail_is_readable_in_the_conversation(connected: Any) -> None:
+    server, _state, _calls = connected
+
+    async def never(context: Any, params: Any) -> Any:
+        raise AssertionError("a read must not ask")
+
+    await _call(server, "calendar_events_list", {"calendarId": "primary"}, never)
+    audit = await _call_tool(server, "governance_audit", {}, never)
+
+    assert audit["ledger"] == "session only"
+    decisions = audit["decisions"]
+    assert len(decisions) == 1
+    assert decisions[0]["operation"] == "calendar.events.list"
+    assert decisions[0]["outcome"] == "allowed"
+    assert decisions[0]["change_hash"]
+
+
+def test_the_ledger_receives_the_decision_when_one_is_configured() -> None:
+    """A fleet points every machine at one project; this is that write."""
+    from adk_harness.workspace.evidence import EvidenceWriter
+
+    written: list[dict[str, Any]] = []
+
+    class Ledger:
+        def record(self, **payload: Any) -> str:
+            written.append(payload)
+            return "entry-1"
+
+    writer = EvidenceWriter(project_id="demo", ledger=Ledger())
+    change = writer.propose(
+        subject="person@example.com",
+        operation="calendar.events.insert",
+        arguments={"calendarId": "primary"},
+    )
+    approval = writer.approve(change, approver="person@example.com", scope={})
+    evidence = writer.record(
+        change,
+        actor="person@example.com",
+        operation="calendar.events.insert",
+        outcome="allowed",
+        reason="approved",
+        approval=approval,
+    )
+
+    assert evidence.ledger_entry_id == "entry-1"
+    assert written[0]["action"] == "calendar.events.insert"
+    assert written[0]["policy_outcome"] == "allowed"
+    assert change.content_hash in written[0]["idempotency_key"]
+
+
+def test_an_unreachable_ledger_does_not_stop_the_work() -> None:
+    from adk_harness.workspace.evidence import EvidenceWriter
+
+    class Broken:
+        def record(self, **payload: Any) -> str:
+            raise RuntimeError("firestore is unreachable")
+
+    writer = EvidenceWriter(project_id="demo", ledger=Broken())
+    change = writer.propose(subject="p", operation="calendar.events.list", arguments={})
+    evidence = writer.record(
+        change, actor="p", operation="calendar.events.list", outcome="allowed", reason="read"
+    )
+
+    assert evidence.ledger_entry_id is None
+    assert writer.trail
