@@ -54,6 +54,7 @@ PARAMETER_TYPES: Mapping[str, type] = {
     "integer": int,
     "number": float,
     "boolean": bool,
+    "object": dict,
 }
 
 # Sharing and sending are refused whatever the token allows, because neither
@@ -174,6 +175,16 @@ def build_tools(grant: Grant, *, services: Sequence[str] | None = None) -> tuple
             if not required or not grant.covers(required):
                 continue
             parameters = dict(method.get("parameters") or {})
+            # Discovery keeps the request body out of `parameters`. Without it
+            # the model has nowhere to put the event it was asked to create.
+            request = method.get("request") or {}
+            if request:
+                resource = str(request.get("$ref", "resource"))
+                parameters["body"] = {
+                    "type": "object",
+                    "description": f"The {resource} to send, as a JSON object.",
+                    "required": method.get("httpMethod") in ("POST", "PUT"),
+                }
             specs.append(
                 ToolSpec(
                     name=_tool_name(method["id"]),

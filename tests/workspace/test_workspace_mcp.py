@@ -116,11 +116,11 @@ async def test_a_write_runs_only_after_the_person_approves(
         return True
 
     monkeypatch.setattr(mcp_stdio, "_ask_person", approves)
-    result = await _call(server, "calendar_events_insert", {"calendarId": "primary"}, None)
+    result = await _call(server, "calendar_events_insert", {"calendarId": "primary", "body": {"summary": "x"}}, None)
 
     assert not result.isError
     assert asked == ["calendar.events.insert"]
-    assert calls == [("calendar.events.insert", {"calendarId": "primary"})]
+    assert calls == [("calendar.events.insert", {"calendarId": "primary", "body": {"summary": "x"}})]
 
 
 async def test_a_declined_write_runs_nothing(
@@ -132,7 +132,7 @@ async def test_a_declined_write_runs_nothing(
         return False
 
     monkeypatch.setattr(mcp_stdio, "_ask_person", declines)
-    result = await _call(server, "calendar_events_insert", {"calendarId": "primary"}, None)
+    result = await _call(server, "calendar_events_insert", {"calendarId": "primary", "body": {"summary": "x"}}, None)
 
     assert not result.isError
     assert calls == []
@@ -167,7 +167,7 @@ async def test_a_client_that_cannot_ask_runs_nothing(connected: Any) -> None:
     """No elicitation callback at all, so the link is never accepted."""
     server, _state, calls = connected
 
-    result = await _call(server, "calendar_events_insert", {"calendarId": "primary"}, None)
+    result = await _call(server, "calendar_events_insert", {"calendarId": "primary", "body": {"summary": "x"}}, None)
 
     assert calls == []
     assert "held" in str(result.content).lower()
@@ -269,8 +269,8 @@ async def test_an_approval_is_bound_to_the_exact_arguments(
         return True
 
     monkeypatch.setattr(mcp_stdio, "_ask_person", approves)
-    await _call(server, "calendar_events_insert", {"calendarId": "primary"}, None)
-    await _call(server, "calendar_events_insert", {"calendarId": "team"}, None)
+    await _call(server, "calendar_events_insert", {"calendarId": "primary", "body": {"summary": "x"}}, None)
+    await _call(server, "calendar_events_insert", {"calendarId": "team", "body": {"summary": "x"}}, None)
 
     approvals = [item.approval for item in state.evidence.trail if item.approval]
     assert len(approvals) == 2
@@ -287,7 +287,7 @@ async def test_a_refusal_is_recorded_rather_than_forgotten(
         return False
 
     monkeypatch.setattr(mcp_stdio, "_ask_person", declines)
-    await _call(server, "calendar_events_insert", {"calendarId": "primary"}, None)
+    await _call(server, "calendar_events_insert", {"calendarId": "primary", "body": {"summary": "x"}}, None)
 
     held = [item for item in state.evidence.trail if item.event.event_type == "held"]
     assert calls == []
@@ -440,7 +440,7 @@ async def test_a_client_that_will_not_ask_gets_a_link_instead(connected: Any) ->
     server, _state, calls = connected
 
     result = await _call_tool(
-        server, "calendar_events_insert", {"calendarId": "primary"}, None
+        server, "calendar_events_insert", {"calendarId": "primary", "body": {"summary": "x"}}, None
     )
 
     assert calls == []
@@ -453,8 +453,8 @@ async def test_the_same_change_keeps_one_link(connected: Any) -> None:
     """Asking twice must not leave two live approvals for one change."""
     server, _state, _calls = connected
 
-    first = await _call_tool(server, "calendar_events_insert", {"calendarId": "primary"}, None)
-    second = await _call_tool(server, "calendar_events_insert", {"calendarId": "primary"}, None)
+    first = await _call_tool(server, "calendar_events_insert", {"calendarId": "primary", "body": {"summary": "x"}}, None)
+    second = await _call_tool(server, "calendar_events_insert", {"calendarId": "primary", "body": {"summary": "x"}}, None)
 
     assert first["approval_url"] == second["approval_url"]
 
@@ -462,16 +462,16 @@ async def test_the_same_change_keeps_one_link(connected: Any) -> None:
 async def test_an_answered_link_lets_the_next_call_run(connected: Any) -> None:
     server, state, calls = connected
 
-    held = await _call_tool(server, "calendar_events_insert", {"calendarId": "primary"}, None)
+    held = await _call_tool(server, "calendar_events_insert", {"calendarId": "primary", "body": {"summary": "x"}}, None)
     token = held["approval_url"].rsplit("/", 1)[-1]
     state.approvals._pending[token].resolve(True)
     item = state.approvals._pending.pop(token)
     state.approvals._granted[item.change_hash] = item
 
-    result = await _call_tool(server, "calendar_events_insert", {"calendarId": "primary"}, None)
+    result = await _call_tool(server, "calendar_events_insert", {"calendarId": "primary", "body": {"summary": "x"}}, None)
 
     assert result["outcome"] == "allowed"
-    assert calls == [("calendar.events.insert", {"calendarId": "primary"})]
+    assert calls == [("calendar.events.insert", {"calendarId": "primary", "body": {"summary": "x"}})]
     assert result["evidence"]["approved_by"] == "person@example.com"
 
 
@@ -479,13 +479,30 @@ async def test_approving_one_change_does_not_run_another(connected: Any) -> None
     """The approval is bound to the arguments the person was shown."""
     server, state, calls = connected
 
-    held = await _call_tool(server, "calendar_events_insert", {"calendarId": "primary"}, None)
+    held = await _call_tool(server, "calendar_events_insert", {"calendarId": "primary", "body": {"summary": "x"}}, None)
     token = held["approval_url"].rsplit("/", 1)[-1]
     state.approvals._pending[token].resolve(True)
     item = state.approvals._pending.pop(token)
     state.approvals._granted[item.change_hash] = item
 
-    other = await _call_tool(server, "calendar_events_insert", {"calendarId": "team"}, None)
+    other = await _call_tool(server, "calendar_events_insert", {"calendarId": "team", "body": {"summary": "x"}}, None)
 
     assert other["outcome"] == "held"
     assert calls == []
+
+
+async def test_a_write_advertises_the_body_it_needs(connected: Any) -> None:
+    """Without this the model calls insert with no event and then improvises."""
+    server, _state, _calls = connected
+    insert = server._tool_manager.get_tool("calendar_events_insert")
+
+    assert "body" in insert.parameters["properties"]
+    assert set(insert.parameters["required"]) == {"body", "calendarId"}
+    assert "Event" in insert.parameters["properties"]["body"]["description"]
+
+
+async def test_a_read_has_no_body(connected: Any) -> None:
+    server, _state, _calls = connected
+    listing = server._tool_manager.get_tool("calendar_events_list")
+
+    assert "body" not in listing.parameters["properties"]
