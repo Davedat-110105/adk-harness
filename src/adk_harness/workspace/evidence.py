@@ -74,6 +74,16 @@ class EvidenceWriter:
     def trail(self) -> tuple[Evidence, ...]:
         return tuple(self._trail)
 
+    def attach_ledger(self, ledger: Any, *, project_id: str) -> None:
+        """Point this machine's trail at one shared project.
+
+        An administrator can set GOOGLE_CLOUD_PROJECT in the server's
+        configuration and nobody is ever asked. Otherwise a person names the
+        project once, in the client's own prompt.
+        """
+        self.ledger = ledger
+        self.project_id = project_id
+
     def propose(self, *, subject: str, operation: str, arguments: Mapping[str, Any]) -> ChangeSet:
         """Describe the change before anyone decides about it."""
         return ChangeSet(

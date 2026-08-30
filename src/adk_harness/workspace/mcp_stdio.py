@@ -32,6 +32,12 @@ from adk_harness.workspace.tools import (
 __all__ = ["ApprovalAnswer", "ServerState", "build_server", "serve"]
 
 
+class LedgerTarget(BaseModel):
+    """Which Google Cloud project holds the shared decision trail."""
+
+    project_id: str = Field(description="Google Cloud project id for the audit ledger")
+
+
 class ApprovalAnswer(BaseModel):
     """What a person is asked before a change others will see."""
 
@@ -128,18 +134,85 @@ async def _run(
     return {**written("allowed", decision.reason), "result": result}
 
 
-def _ledger() -> Any | None:
-    """Return a Firestore ledger when a project is configured, else nothing.
+def _projects(grant: Grant | None) -> tuple[str, ...]:
+    """List the projects this grant can see, or nothing when it cannot look."""
+    if grant is None:
+        return ()
+    try:
+        from google.cloud import resourcemanager_v3
+
+        client = resourcemanager_v3.ProjectsClient(credentials=grant.credentials)
+        return tuple(sorted(project.project_id for project in client.search_projects()))
+    except Exception:
+        # Listing needs a cloud scope this grant may not carry. Ask instead.
+        return ()
+
+
+async def _choose_project(state: ServerState, context: Any) -> str | None:
+    """Offer the projects a person has, and fall back to asking them to name one."""
+    choices = _projects(state.grant)
+    if choices:
+        answer = await context.session.elicit_form(
+            message="Which project should hold the audit trail?",
+            requestedSchema={
+                "type": "object",
+                "properties": {
+                    "project_id": {
+                        "type": "string",
+                        "title": "Project",
+                        "enum": list(choices),
+                    }
+                },
+                "required": ["project_id"],
+            },
+        )
+        if answer.action != "accept" or not answer.content:
+            return None
+        return str(answer.content.get("project_id") or "")
+    answer = await context.elicit(
+        message="Which Google Cloud project should hold the audit trail?",
+        schema=LedgerTarget,
+    )
+    if answer.action != "accept" or not answer.data:
+        return None
+    return answer.data.project_id
+
+
+async def _connect_ledger(
+    state: ServerState, context: Any, project_id: str | None
+) -> dict[str, Any]:
+    """Attach a shared ledger, asking for the project only when nobody said."""
+    target = project_id
+    if not target:
+        try:
+            target = await _choose_project(state, context)
+        except Exception:
+            return {"connected": False, "reason": "this client cannot ask; pass project_id"}
+    if not target or not target.strip():
+        return {"connected": False, "reason": "nobody named a project"}
+    target = target.strip()
+    ledger = _ledger(target)
+    if ledger is None:
+        return {"connected": False, "reason": f"no Firestore ledger opened for {target}"}
+    state.evidence.attach_ledger(ledger, project_id=target)
+    return {"connected": True, "project": target, "ledger": "firestore"}
+
+
+def _ledger(project_id: str | None = None) -> Any | None:
+    """Open a Firestore ledger for a project, or return nothing.
 
     A local demo keeps its trail in memory. A fleet points every machine at one
     project and the trail becomes shared.
     """
-    if not os.environ.get("GOOGLE_CLOUD_PROJECT"):
+    target = project_id or os.environ.get("GOOGLE_CLOUD_PROJECT")
+    if not target:
         return None
     try:
+        from google.cloud import firestore
+
         from adk_harness.governance.ledger import FirestoreActionLedger
 
-        return FirestoreActionLedger()
+        return FirestoreActionLedger(firestore.Client(project=target))
     except Exception:
         return None
 
@@ -302,6 +375,10 @@ def build_server(
             "startup_error": state.startup_error,
         }
 
+    async def connect_ledger(project_id: str | None = None) -> dict[str, Any]:
+        """Send this machine's decisions to a shared Firestore audit trail."""
+        return await _connect_ledger(state, server.get_context(), project_id)
+
     def governance_audit() -> dict[str, Any]:
         """Every decision this session, oldest first, with its change hash."""
         return {
@@ -312,6 +389,7 @@ def build_server(
 
     server.add_tool(workspace_status, name="workspace_status")
     server.add_tool(governance_audit, name="governance_audit")
+    server.add_tool(connect_ledger, name="connect_ledger")
     return server, state
 
 

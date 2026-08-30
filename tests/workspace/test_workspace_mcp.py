@@ -349,3 +349,62 @@ def test_an_unreachable_ledger_does_not_stop_the_work() -> None:
 
     assert evidence.ledger_entry_id is None
     assert writer.trail
+
+
+async def test_the_project_is_offered_as_a_list_when_the_grant_can_see_them(
+    connected: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Picking from a list beats typing a project id from memory."""
+    _server, state, _calls = connected
+    monkeypatch.setattr(mcp_stdio, "_projects", lambda grant: ("alpha-1", "beta-2"))
+    monkeypatch.setattr(mcp_stdio, "_ledger", lambda project: object())
+    offered: list[dict[str, Any]] = []
+
+    class Session:
+        async def elicit_form(self, *, message: str, requestedSchema: dict[str, Any]) -> Any:
+            offered.append(requestedSchema)
+            return types.ElicitResult(action="accept", content={"project_id": "beta-2"})
+
+    class Context:
+        session = Session()
+
+    result = await mcp_stdio._connect_ledger(state, Context(), None)
+
+    assert offered[0]["properties"]["project_id"]["enum"] == ["alpha-1", "beta-2"]
+    assert result == {"connected": True, "project": "beta-2", "ledger": "firestore"}
+    assert state.evidence.project_id == "beta-2"
+
+
+async def test_naming_a_project_skips_the_question(
+    connected: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An administrator can set it once and nobody is ever asked."""
+    _server, state, _calls = connected
+    monkeypatch.setattr(mcp_stdio, "_ledger", lambda project: object())
+
+    class Context:
+        session = None
+
+    result = await mcp_stdio._connect_ledger(state, Context(), "set-by-admin")
+
+    assert result["project"] == "set-by-admin"
+    assert state.evidence.ledger is not None
+
+
+async def test_declining_the_project_question_changes_nothing(
+    connected: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _server, state, _calls = connected
+    monkeypatch.setattr(mcp_stdio, "_projects", lambda grant: ("alpha-1",))
+
+    class Session:
+        async def elicit_form(self, *, message: str, requestedSchema: dict[str, Any]) -> Any:
+            return types.ElicitResult(action="decline")
+
+    class Context:
+        session = Session()
+
+    result = await mcp_stdio._connect_ledger(state, Context(), None)
+
+    assert result["connected"] is False
+    assert state.evidence.ledger is None
